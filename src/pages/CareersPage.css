@@ -1,0 +1,63 @@
+.careers-page {
+  padding: 8rem 2rem;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.quest-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  margin-top: 4rem;
+}
+
+.quest-card {
+  background: rgba(10, 15, 30, 0.4);
+  border-left: 4px solid var(--accent-cyan);
+  padding: 2rem;
+  border-radius: 0 12px 12px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.3s ease;
+}
+
+.quest-card:hover {
+  background: rgba(255, 255, 255, 0.03);
+  transform: translateX(10px);
+}
+
+.quest-details h3 {
+  font-family: var(--font-heading);
+  color: #fff;
+  margin-bottom: 0.5rem;
+}
+
+.quest-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.quest-reward {
+  text-align: right;
+}
+
+.reward-amount {
+  display: block;
+  color: var(--bright-cyan);
+  font-family: var(--font-heading);
+  font-size: 14px;
+}
+
+.btn-quest {
+  margin-top: 1rem;
+  padding: 0.5rem 1.5rem;
+  font-size: 10px;
+}
+
+@media (max-width: 768px) {
+  .quest-card { flex-direction: column; align-items: flex-start; gap: 1.5rem; }
+  .quest-reward { text-align: left; }
+}

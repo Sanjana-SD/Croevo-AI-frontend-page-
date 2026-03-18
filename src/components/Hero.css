@@ -1,0 +1,116 @@
+.hero {
+  padding: 10rem 2rem 5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  text-align: center;
+  position: relative;
+  z-index: 10;
+}
+
+.hero-title {
+  font-family: var(--font-heading);
+  font-size: clamp(2.5rem, 8vw, 5.5rem);
+  text-transform: uppercase;
+  letter-spacing: -2px;
+  line-height: 0.9;
+  margin-bottom: 2rem;
+  color: #fff;
+}
+
+.hero-title span {
+  display: block;
+  color: var(--bright-cyan);
+  text-shadow: 0 0 20px var(--glow-cyan);
+}
+
+.terminal-window {
+  max-width: 800px;
+  margin: 4rem auto;
+  text-align: left;
+  overflow: hidden;
+}
+
+.terminal-header {
+  padding: 0.75rem 1.25rem;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.dots {
+  display: flex;
+  gap: 8px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dot-red { background: #ff5f56; }
+.dot-yellow { background: #ffbd2e; }
+.dot-green { background: #27c93f; }
+
+.terminal-status {
+  font-family: var(--font-heading);
+  font-size: 10px;
+  color: var(--neon-purple);
+  letter-spacing: 1px;
+}
+
+.terminal-body {
+  padding: 2rem;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.1rem;
+  min-height: 220px;
+  line-height: 1.6;
+}
+
+.prompt-user { color: var(--accent-cyan); }
+.prompt-engine { color: var(--neon-green); }
+
+.cta-group {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  margin-top: 3rem;
+}
+
+.btn {
+  padding: 1rem 2.5rem;
+  border-radius: 4px;
+  font-family: var(--font-heading);
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary {
+  background: var(--bright-cyan);
+  color: var(--bg-darker);
+  border: none;
+  box-shadow: 0 0 15px var(--glow-cyan);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 30px var(--bright-cyan);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: #fff;
+  border: 1px solid var(--accent-cyan);
+}
+
+.btn-secondary:hover {
+  background: rgba(0, 191, 255, 0.1);
+  box-shadow: 0 0 15px var(--glow-cyan);
+}

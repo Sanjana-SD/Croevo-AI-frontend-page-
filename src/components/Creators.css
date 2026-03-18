@@ -1,0 +1,39 @@
+.creators-section {
+  padding: 10rem 2rem;
+  text-align: center;
+}
+
+.creator-grid {
+  max-width: 1200px;
+  margin: 5rem auto 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 3rem;
+}
+
+.creator-card {
+  padding: 3rem 2.5rem;
+  text-align: left;
+  transition: all 0.3s ease;
+}
+
+.creator-card h3 {
+  font-family: var(--font-heading);
+  color: #fff;
+  margin-bottom: 1.25rem;
+  text-transform: uppercase;
+  font-size: 1.1rem;
+  letter-spacing: 1px;
+}
+
+.creator-card p {
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.creator-icon {
+  margin-bottom: 2rem;
+  display: flex;
+  align-items: center;
+}
