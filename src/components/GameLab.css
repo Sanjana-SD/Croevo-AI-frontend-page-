@@ -1,0 +1,364 @@
+/* ===== GAME LAB SECTION ===== */
+.game-lab {
+  position: relative;
+  z-index: 1;
+  padding: 6rem 2rem 8rem;
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 229, 255, 0.02) 50%, transparent 100%);
+}
+
+.game-lab-inner {
+  max-width: 860px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+/* ---- Heading ---- */
+.game-lab-heading {
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 700;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  margin-bottom: 0.5rem;
+  text-shadow: 0 0 20px rgba(0, 229, 255, 0.4);
+}
+
+.game-lab-heading span {
+  color: #00e5ff;
+}
+
+.game-lab-subtitle {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 1.15rem;
+  color: #7eb8cc;
+  letter-spacing: 1px;
+  margin-bottom: 2.5rem;
+}
+
+/* ---- Input Area ---- */
+.game-lab-input-area {
+  background: rgba(8, 11, 20, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 229, 255, 0.2);
+  border-radius: 16px;
+  padding: 1.75rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 0 30px rgba(0, 229, 255, 0.06), inset 0 1px 0 rgba(255,255,255,0.04);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.game-lab-input-area:focus-within {
+  border-color: rgba(0, 229, 255, 0.5);
+  box-shadow: 0 0 40px rgba(0, 229, 255, 0.12), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.game-lab-textarea {
+  width: 100%;
+  min-height: 56px;
+  max-height: 120px;
+  background: rgba(5, 8, 16, 0.6);
+  border: 1px solid rgba(0, 229, 255, 0.15);
+  border-radius: 10px;
+  color: #f0f4f8;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 1.05rem;
+  padding: 0.85rem 1.2rem;
+  resize: none;
+  outline: none;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.game-lab-textarea::placeholder {
+  color: #4a6a7a;
+  font-style: italic;
+}
+
+.game-lab-textarea:focus {
+  border-color: #00e5ff;
+  box-shadow: 0 0 15px rgba(0, 229, 255, 0.2);
+}
+
+.game-lab-submit-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+/* ---- Generate Button ---- */
+.game-lab-generate-btn {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #050810;
+  background: linear-gradient(135deg, #00e5ff 0%, #00b8d4 100%);
+  border: none;
+  border-radius: 10px;
+  padding: 0.75rem 2.2rem;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.35);
+}
+
+.game-lab-generate-btn::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, transparent 40%, rgba(255,255,255,0.15) 50%, transparent 60%);
+  transition: transform 0.5s ease;
+  transform: translateX(-100%);
+}
+
+.game-lab-generate-btn:hover::before {
+  transform: translateX(100%);
+}
+
+.game-lab-generate-btn:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 0 35px rgba(0, 229, 255, 0.5);
+}
+
+.game-lab-generate-btn:active {
+  transform: scale(0.97);
+}
+
+/* ---- Quick Pick Chips ---- */
+.game-lab-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-bottom: 2.5rem;
+}
+
+.game-lab-chip {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #7eb8cc;
+  background: rgba(0, 229, 255, 0.06);
+  border: 1px solid rgba(0, 229, 255, 0.18);
+  border-radius: 20px;
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  white-space: nowrap;
+}
+
+.game-lab-chip:hover {
+  color: #00e5ff;
+  background: rgba(0, 229, 255, 0.12);
+  border-color: rgba(0, 229, 255, 0.45);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+/* ---- Canvas Container ---- */
+.game-lab-canvas-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto 1.5rem;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1.5px solid rgba(0, 229, 255, 0.35);
+  box-shadow: 0 0 40px rgba(0, 229, 255, 0.1), 0 0 80px rgba(0, 229, 255, 0.04);
+  background: #050810;
+  animation: canvasGlow 3s ease-in-out infinite alternate;
+}
+
+@keyframes canvasGlow {
+  0% { box-shadow: 0 0 30px rgba(0, 229, 255, 0.08), 0 0 60px rgba(0, 229, 255, 0.03); }
+  100% { box-shadow: 0 0 45px rgba(0, 229, 255, 0.16), 0 0 90px rgba(0, 229, 255, 0.06); }
+}
+
+.game-lab-canvas-wrapper canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 2;
+}
+
+/* "Canvas" placeholder before first game */
+.game-lab-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  color: #2a4a5a;
+  font-family: 'Orbitron', sans-serif;
+  letter-spacing: 2px;
+  font-size: 0.9rem;
+  user-select: none;
+}
+
+.game-lab-placeholder svg {
+  margin-bottom: 1rem;
+  opacity: 0.3;
+}
+
+/* ---- Toolbar ---- */
+.game-lab-toolbar {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 0;
+}
+
+.game-lab-tool-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #7eb8cc;
+  background: rgba(0, 229, 255, 0.05);
+  border: 1px solid rgba(0, 229, 255, 0.15);
+  border-radius: 8px;
+  padding: 0.5rem 1.2rem;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.game-lab-tool-btn:hover {
+  color: #00e5ff;
+  border-color: rgba(0, 229, 255, 0.4);
+  background: rgba(0, 229, 255, 0.1);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.15);
+}
+
+/* ---- Toast ---- */
+.game-lab-toast {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(0, 229, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  color: #00e5ff;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.6rem 1.6rem;
+  border-radius: 10px;
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.game-lab-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 640px) {
+  .game-lab {
+    padding: 4rem 1rem 5rem;
+  }
+  .game-lab-input-area {
+    padding: 1.2rem;
+  }
+  .game-lab-chips {
+    gap: 0.45rem;
+  }
+  .game-lab-chip {
+    font-size: 0.78rem;
+    padding: 0.35rem 0.8rem;
+  }
+  .game-lab-toolbar {
+    gap: 0.6rem;
+  }
+  .game-lab-tool-btn {
+    padding: 0.45rem 0.9rem;
+    font-size: 0.8rem;
+  }
+}
+
+/* ---- Spinner ---- */
+.game-lab-spinner {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 0.4rem;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ---- Loading State ---- */
+.game-lab-canvas-wrapper.loading {
+  animation: loadingGlow 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes loadingGlow {
+  0% { border-color: rgba(0, 229, 255, 0.2); box-shadow: 0 0 20px rgba(0, 229, 255, 0.05); }
+  100% { border-color: rgba(0, 229, 255, 0.6); box-shadow: 0 0 50px rgba(0, 229, 255, 0.2), 0 0 100px rgba(0, 229, 255, 0.08); }
+}
+
+.game-lab-loading-state {
+  color: #00e5ff;
+}
+
+.game-lab-loading-state svg {
+  opacity: 0.8;
+  color: #00e5ff;
+}
+
+.game-lab-loading-sub {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.85rem;
+  color: #4a6a7a;
+  margin-top: 0.5rem;
+  letter-spacing: 0.5px;
+}
+
+/* ---- Disabled states ---- */
+.game-lab-generate-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.game-lab-generate-btn:disabled:hover {
+  transform: none;
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.35);
+}
+
+.game-lab-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* ---- Error ---- */
+.game-lab-error {
+  color: #e45;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+  text-align: center;
+}
+
+/* ---- iframe styling ---- */
+.game-lab-canvas-wrapper iframe {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  border: none;
+  background: #050810;
+}

@@ -21,6 +21,10 @@ const Navbar = ({ onOpenWaitlist }) => {
           FAQ
           <span className="hud-dot"></span>
         </NavLink>
+        <a href="/#game-lab" className="nav-item">
+          GAME LAB
+          <span className="hud-dot"></span>
+        </a>
       </div>
       <button onClick={onOpenWaitlist} className="nav-item nav-cta" style={{ border: 'none', cursor: 'pointer', background: 'var(--bright-cyan)' }}>
         LAUNCH SOON
