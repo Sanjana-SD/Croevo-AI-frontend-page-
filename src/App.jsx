@@ -11,6 +11,7 @@ import CustomCursor from './components/CustomCursor';
 import Home from './pages/Home';
 import FeaturesPage from './pages/FeaturesPage';
 import FAQPage from './pages/FAQPage';
+import GamePage from './pages/GamePage';
 
 function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -29,6 +30,16 @@ function App() {
   }, [location.pathname, showSplash]);
 
   const toggleModal = () => setIsModalOpen(!isModalOpen);
+
+  // Full-screen game page — no navbar/footer
+  if (location.pathname === '/game') {
+    return (
+      <div className="app-container">
+        <BackgroundCanvas />
+        <GamePage />
+      </div>
+    );
+  }
 
   return (
     <div className="app-container">
