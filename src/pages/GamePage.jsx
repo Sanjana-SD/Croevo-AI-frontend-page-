@@ -301,11 +301,27 @@ const GamePage = () => {
   const navigate = useNavigate();
   const gamePrompt = location.state?.prompt || 'asteroids';
   const isBuiltin = location.state?.builtin || false;
+  const gameId = gamePrompt.toLowerCase().replace(/\s+/g, '-');
 
   const [gameMode, setGameMode] = useState('none');
   const [aiHtml, setAiHtml] = useState('');
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
+
+  // New State for Game Details and AI Edit
+  const [game, setGame] = useState({
+    id: gameId,
+    title: gamePrompt,
+    description: 'An AI-powered game adventure.',
+    prompt: gamePrompt,
+    builtin: isBuiltin
+  });
+
+  const [chatHistory, setChatHistory] = useState([
+    { role: 'ai', content: "Hi! Describe any changes you'd like to make to this game and I'll update it for you." }
+  ]);
+  const [inputText, setInputText] = useState('');
+  const [isAILoading, setIsAILoading] = useState(false);
 
   const canvasRef = useRef(null);
   const canvasWrapperRef = useRef(null);
@@ -313,12 +329,41 @@ const GamePage = () => {
   const gameRef = useRef(null);
   const rafRef = useRef(null);
   const keysRef = useRef({});
+  const chatEndRef = useRef(null);
+
+  /* ---- Sync with Backend on Mount ---- */
+  useEffect(() => {
+    const fetchGame = async () => {
+      try {
+        const res = await fetch(`/api/games/${gameId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setGame(data);
+        } else {
+          // Initialize if not found
+          await fetch(`/api/games/${gameId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(game)
+          });
+        }
+      } catch (err) {
+        console.warn('Backend sync failed, using local state.');
+      }
+    };
+    fetchGame();
+  }, [gameId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ---- Scroll Chat to Bottom ---- */
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatHistory]);
 
   /* ---- keyboard listeners ---- */
   useEffect(() => {
     const down = (e) => {
       keysRef.current[e.key] = true;
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key) && document.activeElement.tagName !== 'INPUT') {
         e.preventDefault();
       }
     };
@@ -357,13 +402,13 @@ const GamePage = () => {
     canvas.height = 400;
 
     const starter = GAME_STARTERS[gameKey];
-    const game = starter(canvas, keysRef.current);
-    gameRef.current = game;
+    const gameStarter = starter(canvas, keysRef.current);
+    gameRef.current = gameStarter;
     setGameMode('builtin');
     focusGameArea();
 
     function loop() {
-      try { game.tick(); } catch (_) { }
+      try { gameStarter.tick(); } catch (_) { }
       rafRef.current = requestAnimationFrame(loop);
     }
     rafRef.current = requestAnimationFrame(loop);
@@ -383,7 +428,16 @@ const GamePage = () => {
       const html = await generateGameFromAI(text);
       setAiHtml(html);
       setGameMode('ai');
+      setGame(prev => ({ ...prev, html })); // Sync game code to state
       focusGameArea();
+      
+      // Persist the initial generated html to the backend
+      fetch(`/api/games/${gameId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ html })
+      }).catch(e => console.warn('Initial HTML persist failed'));
+
     } catch (err) {
       console.error('AI generation failed, falling back to built-in game:', err);
       setToast('AI unavailable — loading closest match');
@@ -391,6 +445,68 @@ const GamePage = () => {
       launchBuiltinGame(text);
     }
   }, [focusGameArea, launchBuiltinGame]);
+
+  /* ---- Handle AI Message ---- */
+  const handleSendMessage = async () => {
+    if (!inputText.trim() || isAILoading) return;
+
+    const userMsg = inputText.trim();
+    setInputText('');
+    setChatHistory(prev => [...prev, { role: 'user', content: userMsg }]);
+    setIsAILoading(true);
+
+    try {
+      const response = await fetch(`/api/games/${gameId}/ai-edit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userMessage: userMsg,
+          conversationHistory: chatHistory
+        })
+      });
+
+      if (!response.ok) {
+        setChatHistory(prev => [...prev, { role: 'error', content: "Sorry, I couldn't process that. Please try rephrasing." }]);
+        setIsAILoading(false);
+        return;
+      }
+
+      const { updatedFields, message } = await response.json();
+
+      // If AI updated the HTML/Game code
+      if (updatedFields.html) {
+        setAiHtml(updatedFields.html);
+        setGameMode('ai');
+        focusGameArea();
+      }
+
+      // Parse fields updated
+      const fieldNames = Object.keys(updatedFields).filter(f => f !== 'html').join(' and ') || 'gameplay';
+      const aiResponse = message ? `Done! I've updated the ${fieldNames}.` : "I've applied those changes for you!";
+
+      // Optimistic Update
+      setGame(prev => ({ ...prev, ...updatedFields }));
+      setChatHistory(prev => [...prev, { role: 'ai', content: aiResponse }]);
+
+      // Persist via Existing Update Endpoint
+      try {
+        const patchRes = await fetch(`/api/games/${gameId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatedFields)
+        });
+        if (!patchRes.ok) throw new Error("Persistence failed");
+      } catch (e) {
+        setChatHistory(prev => [...prev, { role: 'error', content: "The changes couldn't be saved. Please try again." }]);
+      }
+
+    } catch (err) {
+      console.error(err);
+      setChatHistory(prev => [...prev, { role: 'error', content: "Sorry, I couldn't process that. Please try rephrasing." }]);
+    } finally {
+      setIsAILoading(false);
+    }
+  };
 
   /* ---- auto-launch game on mount ---- */
   useEffect(() => {
@@ -440,7 +556,7 @@ const GamePage = () => {
         </button>
         <div className="game-page-title">
           <Gamepad2 size={20} />
-          <span>{gamePrompt}</span>
+          <span>{game.title}</span>
         </div>
         <div className="game-page-actions">
           {hasGame && (
@@ -499,6 +615,60 @@ const GamePage = () => {
             {error}
           </motion.div>
         )}
+      </div>
+
+      {/* Game Details & AI Edit Section */}
+      <div className="game-details-section">
+        <motion.div 
+          className="game-info-card"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <h1>{game.title}</h1>
+          <p>{game.description}</p>
+
+          <div className="game-ai-edit-section">
+            <div className="section-header">
+              <div className="ai-badge">AI</div>
+              <h2>Edit with AI</h2>
+            </div>
+
+            <div className="ai-chat-container">
+              <div className="ai-chat-history">
+                {chatHistory.map((msg, idx) => (
+                  <div key={idx} className={`chat-message ${msg.role}`}>
+                    {msg.content}
+                  </div>
+                ))}
+                {isAILoading && (
+                  <div className="chat-message ai">
+                    <Loader size={16} className="loading-spinner" />
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              <div className="ai-chat-input-row">
+                <input 
+                  type="text" 
+                  placeholder="Describe how you'd like to change this game..."
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                  disabled={isAILoading}
+                />
+                <button 
+                  className="ai-chat-send-btn"
+                  onClick={handleSendMessage}
+                  disabled={isAILoading || !inputText.trim()}
+                >
+                  {isAILoading ? <Loader size={16} className="loading-spinner" /> : "Send"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
       </div>
 
       {/* Toast */}

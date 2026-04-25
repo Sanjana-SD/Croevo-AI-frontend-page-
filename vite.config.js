@@ -10,16 +10,9 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       proxy: {
-        // Proxy /api/v2/generate-game → Google Gemini AI
-        '/api/v2/generate-game': {
-          target: 'https://generativelanguage.googleapis.com',
+        '/api': {
+          target: 'http://localhost:5001',
           changeOrigin: true,
-          rewrite: (path) => `/v1/models/gemini-1.5-flash:generateContent?key=${env.GOOGLE_GEMINI_API_KEY}`,
-          configure: (proxy) => {
-            proxy.on('proxyReq', (proxyReq) => {
-              console.log('Proxying request to:', proxyReq.path);
-            });
-          }
         }
       }
     }

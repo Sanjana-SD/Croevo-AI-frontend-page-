@@ -95,9 +95,126 @@ function makeFallbackHtml(mode, userPrompt) {
 </html>`;
 }
 
+const games = {}; // In-memory store: { [id]: { id, title, description, prompt, builtin } }
+
+app.get('/api/games/:id', (req, res) => {
+  const { id } = req.params;
+  const game = games[id];
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+  res.json(game);
+});
+
+app.patch('/api/games/:id', (req, res) => {
+  const { id } = req.params;
+  if (!games[id]) {
+    // If not exists, initialize it (for first-time updates from frontend)
+    games[id] = { id, title: 'New Game', description: '', prompt: '', builtin: false };
+  }
+  games[id] = { ...games[id], ...req.body };
+  res.json(games[id]);
+});
+
+app.post('/api/games/:id/ai-edit', async (req, res) => {
+  const { id } = req.params;
+  const { userMessage, conversationHistory } = req.body;
+
+  // 1. Fetch current game data
+  let currentGame = games[id];
+  if (!currentGame) {
+    // Attempt fallback or initialize
+    currentGame = { id, title: 'Unknown Game', description: 'No description available.' };
+  }
+
+  // 2. Prepare System Prompt
+  const systemPrompt = `You are an expert 2D browser game developer and data editor.
+The user will describe changes they want to make to a game (metadata or gameplay).
+
+Current game data:
+${JSON.stringify(currentGame, null, 2)}
+
+Rules for updating game code (html field):
+- Use HTML5 Canvas and vanilla JavaScript ONLY.
+- Use this color palette: background #050810, player #00e5ff, enemies/obstacles #ee4455, collectibles #ffaa00, platforms #1a3a6a, text #00e5ff.
+- Use font family: "Orbitron", monospace.
+- The canvas should be 600x400 pixels.
+- The code must be a single self-contained HTML file.
+
+Based on the user's request, return ONLY a valid JSON object containing the fields that should be updated. 
+- If the user asks to change the game logic, speed, colors, or mechanics, include the full updated HTML in the "html" field.
+- If they ask to change the title or description, update the "title" or "description" fields.
+Do not include any explanation, markdown, or code blocks — only raw JSON.
+
+Example response format:
+{"title": "New Title", "html": "<!DOCTYPE html>...updated game code..."}`;
+
+  // 3. Call Groq API
+  try {
+    const GROQ_KEY = process.env.GROQ_API_KEY;
+    if (!GROQ_KEY || GROQ_KEY === 'your_groq_api_key_here') {
+      return res.status(400).json({ error: 'GROQ_API_KEY is not configured on the server.' });
+    }
+
+    console.log('Sending request to Groq API...');
+    const messages = [
+      { role: "system", content: systemPrompt },
+      ...conversationHistory.map(msg => ({
+        role: msg.role === 'user' ? 'user' : (msg.role === 'error' ? 'user' : 'assistant'),
+        content: msg.content
+      })),
+      { role: "user", content: userMessage }
+    ];
+
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GROQ_KEY}`
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        max_tokens: 4000,
+        messages: messages
+      })
+    });
+
+    console.log('Groq Response Status:', response.status);
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('Groq API error text:', errorData);
+      return res.status(500).json({ error: 'Failed to communicate with AI service.', details: errorData });
+    }
+
+    const data = await response.json();
+    console.log('Groq full response data:', JSON.stringify(data, null, 2));
+    const aiReply = data.choices[0].message.content;
+    console.log('Raw AI Reply:', aiReply);
+
+    // 4. Parse the JSON fields to update
+    let updatedFields;
+    try {
+      // Find JSON if it's wrapped in markers or text
+      const jsonMatch = aiReply.match(/\{[\s\S]*\}/);
+      const jsonString = jsonMatch ? jsonMatch[0] : aiReply;
+      updatedFields = JSON.parse(jsonString);
+      console.log('Parsed updatedFields:', Object.keys(updatedFields));
+    } catch (parseErr) {
+      console.error('Failed to parse AI response as JSON. AI Reply was:', aiReply);
+      return res.status(500).json({ error: 'AI returned invalid data format.', raw: aiReply });
+    }
+
+    // 5. Return to frontend
+    res.json({ updatedFields, message: aiReply });
+  } catch (err) {
+    console.error('AI Edit error:', err);
+    res.status(500).json({ error: 'An internal error occurred during AI processing.' });
+  }
+});
+
 app.post('/api/v2/generate-game', async (req, res) => {
   try {
     const body = req.body || {};
+    // ... rest of the generate-game logic ...
     // Attempt to extract user prompt from Gemini v2-like body
     let prompt = '';
     try {
@@ -145,7 +262,7 @@ app.post('/api/v2/generate-game', async (req, res) => {
             const json = JSON.parse(text);
             return res.json(json);
           } catch (e) {
-            return res.json({ candidates: [{ content: { parts: [{ text }] }] } });
+            return res.json({ candidates: [{ content: { parts: [{ text }] } }] });
           }
         }
       } catch (err) {
