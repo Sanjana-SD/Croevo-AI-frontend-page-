@@ -10,7 +10,7 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json({ limit: '1mb' }));
 
-const PORT = process.env.PORT || 5173;
+const PORT = process.env.PORT || 5001;
 
 function resolveGame(prompt) {
   const lower = (prompt || '').toLowerCase();
@@ -95,6 +95,62 @@ function makeFallbackHtml(mode, userPrompt) {
 </html>`;
 }
 
+const SIMPLE_COLOR_MAP = {
+  blue: '#2a8eff',
+  red: '#ee4455',
+  green: '#39d98a',
+  yellow: '#ffaa00',
+  orange: '#ff8c00',
+  purple: '#bc13fe',
+  cyan: '#00e5ff',
+  gold: '#ffaa00',
+};
+
+function extractIntentTitle(message) {
+  const titleMatch = message.match(/(?:name|title)\s+(?:to|as)\s+(.+)$/i);
+  if (titleMatch) return titleMatch[1].trim();
+  const shortMatch = message.match(/^(?:rename|change).*(?:name|title)\s*(?:to|as)?\s*(.+)$/i);
+  return shortMatch ? shortMatch[1].trim() : null;
+}
+
+function colorNameToHex(name) {
+  if (!name) return null;
+  return SIMPLE_COLOR_MAP[name.toLowerCase()] || null;
+}
+
+function applySimpleAiEditFallback(userMessage, currentGame) {
+  const updatedFields = {};
+  const message = (userMessage || '').trim();
+  const lower = message.toLowerCase();
+
+  const title = extractIntentTitle(message);
+  if (title) {
+    updatedFields.title = title;
+  }
+
+  if (lower.includes('description') || lower.includes('describe')) {
+    const descMatch = message.match(/description\s+(?:to|as)\s+(.+)$/i);
+    if (descMatch) {
+      updatedFields.description = descMatch[1].trim();
+    }
+  }
+
+  if (lower.includes('coin color') || lower.includes('collectible color')) {
+    const colorMatch = message.match(/(?:coin|collectible) color(?: to| to be)?\s+(\w+)/i) || message.match(/color(?: to| to be)?\s+(\w+)/i);
+    const hex = colorNameToHex(colorMatch?.[1]);
+    const htmlSource = currentGame.html || (currentGame.prompt ? makeFallbackHtml(resolveGame(currentGame.prompt), currentGame.prompt) : null);
+    if (hex && htmlSource) {
+      updatedFields.html = htmlSource.replace(/#ffaa00/gi, hex);
+    }
+  }
+
+  if (lower.includes('change game') && lower.includes('name') && !updatedFields.title) {
+    updatedFields.title = title || `${currentGame.title || 'Game'} Updated`;
+  }
+
+  return updatedFields;
+}
+
 const games = {}; // In-memory store: { [id]: { id, title, description, prompt, builtin } }
 
 app.get('/api/games/:id', (req, res) => {
@@ -123,6 +179,16 @@ app.post('/api/games/:id/ai-edit', async (req, res) => {
   if (!currentGame) {
     // Attempt fallback or initialize
     currentGame = { id, title: 'Unknown Game', description: 'No description available.' };
+  }
+
+  const fallbackEdit = applySimpleAiEditFallback(userMessage, currentGame);
+  const GROQ_KEY = process.env.GROQ_API_KEY;
+  if (!GROQ_KEY || GROQ_KEY === 'your_groq_api_key_here') {
+    if (Object.keys(fallbackEdit).length > 0) {
+      games[id] = { ...currentGame, ...fallbackEdit };
+      return res.json({ updatedFields: fallbackEdit, message: 'Applied a local fallback edit because the AI service is not configured.' });
+    }
+    return res.status(400).json({ error: 'GROQ_API_KEY is not configured on the server and the request could not be handled locally.' });
   }
 
   // 2. Prepare System Prompt

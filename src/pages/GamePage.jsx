@@ -452,7 +452,8 @@ const GamePage = () => {
 
     const userMsg = inputText.trim();
     setInputText('');
-    setChatHistory(prev => [...prev, { role: 'user', content: userMsg }]);
+    const updatedHistory = [...chatHistory, { role: 'user', content: userMsg }];
+    setChatHistory(updatedHistory);
     setIsAILoading(true);
 
     try {
@@ -461,7 +462,7 @@ const GamePage = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userMessage: userMsg,
-          conversationHistory: chatHistory
+          conversationHistory: updatedHistory
         })
       });
 
