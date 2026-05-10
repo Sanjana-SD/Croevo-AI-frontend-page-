@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { motion, Reorder, useDragControls } from 'framer-motion';
+import { motion, useDragControls } from 'framer-motion';
 import { RotateCcw, Share2, Gamepad2, Loader, ArrowLeft, GripHorizontal } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import './GamePage.css';
@@ -296,15 +296,22 @@ const CHIP_PROMPTS = new Set(CHIPS.map(c => c.prompt));
 /* ══════════════════════════════════════════════
    GAME PAGE COMPONENT — Full-screen game view
    ══════════════════════════════════════════════ */
-const SectionItem = ({ item, children }) => {
+const DraggableSection = ({ item, children }) => {
   const controls = useDragControls();
   return (
-    <Reorder.Item value={item} id={item} dragListener={false} dragControls={controls} className="game-page-reorder-item">
+    <motion.div 
+      drag 
+      dragListener={false} 
+      dragControls={controls} 
+      dragMomentum={false} 
+      whileDrag={{ zIndex: 50, scale: 1.02 }}
+      className="game-page-reorder-item"
+    >
       <div className="drag-handle-wrapper" onPointerDown={(e) => controls.start(e)} style={{ touchAction: 'none' }}>
         <GripHorizontal size={20} />
       </div>
       {children}
-    </Reorder.Item>
+    </motion.div>
   );
 };
 
@@ -582,9 +589,9 @@ const GamePage = () => {
         </div>
       </div>
 
-      <Reorder.Group axis="y" values={sections} onReorder={setSections} className="game-page-reorder-group">
+      <div className="game-page-reorder-group">
         {sections.map((section) => (
-          <SectionItem key={section} item={section}>
+          <DraggableSection key={section} item={section}>
             {section === 'game' && (
               <div className="game-page-content">
                 <motion.div
@@ -689,9 +696,9 @@ const GamePage = () => {
                 </motion.div>
               </div>
             )}
-          </SectionItem>
+          </DraggableSection>
         ))}
-      </Reorder.Group>
+      </div>
 
       {/* Toast */}
       <div className={`game-lab-toast ${toast ? 'visible' : ''}`}>{toast}</div>
