@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { RotateCcw, Share2, Gamepad2, Loader, ArrowLeft } from 'lucide-react';
+import { motion, Reorder, useDragControls } from 'framer-motion';
+import { RotateCcw, Share2, Gamepad2, Loader, ArrowLeft, GripHorizontal } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import './GamePage.css';
 
@@ -296,6 +296,18 @@ const CHIP_PROMPTS = new Set(CHIPS.map(c => c.prompt));
 /* ══════════════════════════════════════════════
    GAME PAGE COMPONENT — Full-screen game view
    ══════════════════════════════════════════════ */
+const SectionItem = ({ item, children }) => {
+  const controls = useDragControls();
+  return (
+    <Reorder.Item value={item} id={item} dragListener={false} dragControls={controls} className="game-page-reorder-item">
+      <div className="drag-handle-wrapper" onPointerDown={(e) => controls.start(e)} style={{ touchAction: 'none' }}>
+        <GripHorizontal size={20} />
+      </div>
+      {children}
+    </Reorder.Item>
+  );
+};
+
 const GamePage = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -322,6 +334,7 @@ const GamePage = () => {
   ]);
   const [inputText, setInputText] = useState('');
   const [isAILoading, setIsAILoading] = useState(false);
+  const [sections, setSections] = useState(['game', 'details']);
 
   const canvasRef = useRef(null);
   const canvasWrapperRef = useRef(null);
@@ -569,108 +582,116 @@ const GamePage = () => {
         </div>
       </div>
 
-      {/* Game Area */}
-      <div className="game-page-content">
-        <motion.div
-          ref={canvasWrapperRef}
-          className={`game-page-canvas-wrapper ${isLoading ? 'loading' : ''}`}
-          tabIndex={0}
-          style={{ outline: 'none' }}
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-        >
-          {/* Loading */}
-          {isLoading && (
-            <div className="game-page-placeholder game-page-loading-state">
-              <Loader size={48} className="game-lab-spinner" />
-              <span>GENERATING YOUR GAME...</span>
-              <span className="game-page-loading-sub">AI is building a custom game for you</span>
-            </div>
-          )}
-
-          {/* Built-in canvas */}
-          <canvas ref={canvasRef} style={{ display: gameMode === 'builtin' ? 'block' : 'none' }} />
-
-          {/* AI-generated iframe */}
-          {gameMode === 'ai' && aiHtml && (
-            <iframe
-              ref={iframeRef}
-              srcDoc={aiHtml}
-              title="AI Generated Game"
-              sandbox="allow-scripts"
-              style={{
-                width: '100%',
-                aspectRatio: '3 / 2',
-                border: 'none',
-                display: 'block',
-                background: '#050810',
-              }}
-            />
-          )}
-        </motion.div>
-
-        {/* Error */}
-        {error && (
-          <motion.div className="game-page-error" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            {error}
-          </motion.div>
-        )}
-      </div>
-
-      {/* Game Details & AI Edit Section */}
-      <div className="game-details-section">
-        <motion.div 
-          className="game-info-card"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <h1>{game.title}</h1>
-          <p>{game.description}</p>
-
-          <div className="game-ai-edit-section">
-            <div className="section-header">
-              <div className="ai-badge">AI</div>
-              <h2>Edit with AI</h2>
-            </div>
-
-            <div className="ai-chat-container">
-              <div className="ai-chat-history">
-                {chatHistory.map((msg, idx) => (
-                  <div key={idx} className={`chat-message ${msg.role}`}>
-                    {msg.content}
-                  </div>
-                ))}
-                {isAILoading && (
-                  <div className="chat-message ai">
-                    <Loader size={16} className="loading-spinner" />
-                  </div>
-                )}
-                <div ref={chatEndRef} />
-              </div>
-
-              <div className="ai-chat-input-row">
-                <input 
-                  type="text" 
-                  placeholder="Describe how you'd like to change this game..."
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                  disabled={isAILoading}
-                />
-                <button 
-                  className="ai-chat-send-btn"
-                  onClick={handleSendMessage}
-                  disabled={isAILoading || !inputText.trim()}
+      <Reorder.Group axis="y" values={sections} onReorder={setSections} className="game-page-reorder-group">
+        {sections.map((section) => (
+          <SectionItem key={section} item={section}>
+            {section === 'game' && (
+              <div className="game-page-content">
+                <motion.div
+                  ref={canvasWrapperRef}
+                  className={`game-page-canvas-wrapper ${isLoading ? 'loading' : ''}`}
+                  tabIndex={0}
+                  style={{ outline: 'none' }}
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.5 }}
                 >
-                  {isAILoading ? <Loader size={16} className="loading-spinner" /> : "Send"}
-                </button>
+                  {/* Loading */}
+                  {isLoading && (
+                    <div className="game-page-placeholder game-page-loading-state">
+                      <Loader size={48} className="game-lab-spinner" />
+                      <span>GENERATING YOUR GAME...</span>
+                      <span className="game-page-loading-sub">AI is building a custom game for you</span>
+                    </div>
+                  )}
+
+                  {/* Built-in canvas */}
+                  <canvas ref={canvasRef} style={{ display: gameMode === 'builtin' ? 'block' : 'none' }} />
+
+                  {/* AI-generated iframe */}
+                  {gameMode === 'ai' && aiHtml && (
+                    <iframe
+                      ref={iframeRef}
+                      srcDoc={aiHtml}
+                      title="AI Generated Game"
+                      sandbox="allow-scripts"
+                      style={{
+                        width: '100%',
+                        aspectRatio: '3 / 2',
+                        border: 'none',
+                        display: 'block',
+                        background: '#050810',
+                      }}
+                    />
+                  )}
+                </motion.div>
+
+                {/* Error */}
+                {error && (
+                  <motion.div className="game-page-error" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                    {error}
+                  </motion.div>
+                )}
               </div>
-            </div>
-          </div>
-        </motion.div>
-      </div>
+            )}
+
+            {section === 'details' && (
+              <div className="game-details-section">
+                <motion.div 
+                  className="game-info-card"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <h1>{game.title}</h1>
+                  <p>{game.description}</p>
+
+                  <div className="game-ai-edit-section">
+                    <div className="section-header">
+                      <div className="ai-badge">AI</div>
+                      <h2>Edit with AI</h2>
+                    </div>
+
+                    <div className="ai-chat-container">
+                      <div className="ai-chat-history">
+                        {chatHistory.map((msg, idx) => (
+                          <div key={idx} className={`chat-message ${msg.role}`}>
+                            {msg.content}
+                          </div>
+                        ))}
+                        {isAILoading && (
+                          <div className="chat-message ai">
+                            <Loader size={16} className="loading-spinner" />
+                          </div>
+                        )}
+                        <div ref={chatEndRef} />
+                      </div>
+
+                      <div className="ai-chat-input-row">
+                        <input 
+                          type="text" 
+                          placeholder="Describe how you'd like to change this game..."
+                          value={inputText}
+                          onChange={(e) => setInputText(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                          disabled={isAILoading}
+                        />
+                        <button 
+                          className="ai-chat-send-btn"
+                          onClick={handleSendMessage}
+                          disabled={isAILoading || !inputText.trim()}
+                        >
+                          {isAILoading ? <Loader size={16} className="loading-spinner" /> : "Send"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </SectionItem>
+        ))}
+      </Reorder.Group>
 
       {/* Toast */}
       <div className={`game-lab-toast ${toast ? 'visible' : ''}`}>{toast}</div>
