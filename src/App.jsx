@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
+import { CoinProvider } from './context/CoinContext';
 import SplashScreen from './components/SplashScreen';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -12,6 +13,7 @@ import Home from './pages/Home';
 import FeaturesPage from './pages/FeaturesPage';
 import FAQPage from './pages/FAQPage';
 import GamePage from './pages/GamePage';
+import WalletPage from './pages/WalletPage';
 
 function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -34,59 +36,64 @@ function App() {
   // Full-screen game page — no navbar/footer
   if (location.pathname === '/game') {
     return (
-      <div className="app-container">
-        <BackgroundCanvas />
-        <GamePage />
-      </div>
+      <CoinProvider>
+        <div className="app-container">
+          <BackgroundCanvas />
+          <GamePage />
+        </div>
+      </CoinProvider>
     );
   }
 
   return (
-    <div className="app-container">
-      <CustomCursor />
-      <BackgroundCanvas />
-      
-      <AnimatePresence mode="wait">
-        {showSplash ? (
-          <motion.div
-            key="splash"
-            exit={{ opacity: 0, scale: 1.1 }}
-            transition={{ duration: 0.8, ease: "easeInOut" }}
-          >
-            <SplashScreen />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="main-ui"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 1 }}
-          >
-            <Navbar onOpenWaitlist={toggleModal} />
-            <SystemMonitor />
-            <main className="content-wrap">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={location.pathname}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.4 }}
-                >
-                  <Routes location={location} key={location.pathname}>
-                    <Route path="/" element={<Home onOpenWaitlist={toggleModal} />} />
-                    <Route path="/features" element={<FeaturesPage onOpenWaitlist={toggleModal} />} />
-                    <Route path="/faq" element={<FAQPage />} />
-                  </Routes>
-                </motion.div>
-              </AnimatePresence>
-            </main>
-            <Footer />
-            <WaitlistModal isOpen={isModalOpen} onClose={toggleModal} />
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+    <CoinProvider>
+      <div className="app-container">
+        <CustomCursor />
+        <BackgroundCanvas />
+        
+        <AnimatePresence mode="wait">
+          {showSplash ? (
+            <motion.div
+              key="splash"
+              exit={{ opacity: 0, scale: 1.1 }}
+              transition={{ duration: 0.8, ease: "easeInOut" }}
+            >
+              <SplashScreen />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="main-ui"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1 }}
+            >
+              <Navbar onOpenWaitlist={toggleModal} />
+              <SystemMonitor />
+              <main className="content-wrap">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={location.pathname}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.4 }}
+                  >
+                    <Routes location={location} key={location.pathname}>
+                      <Route path="/" element={<Home onOpenWaitlist={toggleModal} />} />
+                      <Route path="/features" element={<FeaturesPage onOpenWaitlist={toggleModal} />} />
+                      <Route path="/faq" element={<FAQPage />} />
+                      <Route path="/wallet" element={<WalletPage />} />
+                    </Routes>
+                  </motion.div>
+                </AnimatePresence>
+              </main>
+              <Footer />
+              <WaitlistModal isOpen={isModalOpen} onClose={toggleModal} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </CoinProvider>
   );
 }
 
