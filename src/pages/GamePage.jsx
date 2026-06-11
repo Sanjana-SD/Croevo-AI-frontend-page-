@@ -1,6 +1,10 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, useDragControls } from 'framer-motion';
+<<<<<<< HEAD
 import { RotateCcw, Share2, Gamepad2, Loader, ArrowLeft, Coins, Shield, Zap, Sparkles, LayoutGrid, HelpCircle, Hammer } from 'lucide-react';
+=======
+import { RotateCcw, Share2, Gamepad2, Loader, ArrowLeft, GripHorizontal } from 'lucide-react';
+>>>>>>> 0910c5aef3e52c74bae8ed950610bba69e0f4d49
 import { useLocation, useNavigate } from 'react-router-dom';
 import './GamePage.css';
 
@@ -503,6 +507,25 @@ const CHIP_PROMPTS = new Set(CHIPS.map(c => c.prompt));
 /* ══════════════════════════════════════════════
    GAME PAGE COMPONENT — Full-screen game view
    ══════════════════════════════════════════════ */
+const DraggableSection = ({ item, children }) => {
+  const controls = useDragControls();
+  return (
+    <motion.div 
+      drag 
+      dragListener={false} 
+      dragControls={controls} 
+      dragMomentum={false} 
+      whileDrag={{ zIndex: 50, scale: 1.02 }}
+      className="game-page-reorder-item"
+    >
+      <div className="drag-handle-wrapper" onPointerDown={(e) => controls.start(e)} style={{ touchAction: 'none' }}>
+        <GripHorizontal size={20} />
+      </div>
+      {children}
+    </motion.div>
+  );
+};
+
 const GamePage = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -529,6 +552,7 @@ const GamePage = () => {
   ]);
   const [inputText, setInputText] = useState('');
   const [isAILoading, setIsAILoading] = useState(false);
+  const [sections, setSections] = useState(['game', 'details']);
 
   // Drag states and controls
   const gameViewDragControls = useDragControls();
@@ -941,6 +965,7 @@ const GamePage = () => {
         </div>
       </div>
 
+<<<<<<< HEAD
       {/* Main Workspace Workspace Dashboard */}
       <div className="game-workspace">
         {/* Panel 1: Game View Card */}
@@ -1231,10 +1256,117 @@ const GamePage = () => {
                     {isAILoading ? <Loader size={16} className="loading-spinner" /> : "Send"}
                   </button>
                 </div>
+=======
+      <div className="game-page-reorder-group">
+        {sections.map((section) => (
+          <DraggableSection key={section} item={section}>
+            {section === 'game' && (
+              <div className="game-page-content">
+                <motion.div
+                  ref={canvasWrapperRef}
+                  className={`game-page-canvas-wrapper ${isLoading ? 'loading' : ''}`}
+                  tabIndex={0}
+                  style={{ outline: 'none' }}
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  {/* Loading */}
+                  {isLoading && (
+                    <div className="game-page-placeholder game-page-loading-state">
+                      <Loader size={48} className="game-lab-spinner" />
+                      <span>GENERATING YOUR GAME...</span>
+                      <span className="game-page-loading-sub">AI is building a custom game for you</span>
+                    </div>
+                  )}
+
+                  {/* Built-in canvas */}
+                  <canvas ref={canvasRef} style={{ display: gameMode === 'builtin' ? 'block' : 'none' }} />
+
+                  {/* AI-generated iframe */}
+                  {gameMode === 'ai' && aiHtml && (
+                    <iframe
+                      ref={iframeRef}
+                      srcDoc={aiHtml}
+                      title="AI Generated Game"
+                      sandbox="allow-scripts"
+                      style={{
+                        width: '100%',
+                        aspectRatio: '3 / 2',
+                        border: 'none',
+                        display: 'block',
+                        background: '#050810',
+                      }}
+                    />
+                  )}
+                </motion.div>
+
+                {/* Error */}
+                {error && (
+                  <motion.div className="game-page-error" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                    {error}
+                  </motion.div>
+                )}
+>>>>>>> 0910c5aef3e52c74bae8ed950610bba69e0f4d49
               </div>
-            </div>
-          </div>
-        </motion.div>
+            )}
+
+            {section === 'details' && (
+              <div className="game-details-section">
+                <motion.div 
+                  className="game-info-card"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <h1>{game.title}</h1>
+                  <p>{game.description}</p>
+
+                  <div className="game-ai-edit-section">
+                    <div className="section-header">
+                      <div className="ai-badge">AI</div>
+                      <h2>Edit with AI</h2>
+                    </div>
+
+                    <div className="ai-chat-container">
+                      <div className="ai-chat-history">
+                        {chatHistory.map((msg, idx) => (
+                          <div key={idx} className={`chat-message ${msg.role}`}>
+                            {msg.content}
+                          </div>
+                        ))}
+                        {isAILoading && (
+                          <div className="chat-message ai">
+                            <Loader size={16} className="loading-spinner" />
+                          </div>
+                        )}
+                        <div ref={chatEndRef} />
+                      </div>
+
+                      <div className="ai-chat-input-row">
+                        <input 
+                          type="text" 
+                          placeholder="Describe how you'd like to change this game..."
+                          value={inputText}
+                          onChange={(e) => setInputText(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                          disabled={isAILoading}
+                        />
+                        <button 
+                          className="ai-chat-send-btn"
+                          onClick={handleSendMessage}
+                          disabled={isAILoading || !inputText.trim()}
+                        >
+                          {isAILoading ? <Loader size={16} className="loading-spinner" /> : "Send"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </DraggableSection>
+        ))}
       </div>
 
       {/* Toast */}
