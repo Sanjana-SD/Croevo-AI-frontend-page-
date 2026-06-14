@@ -46,54 +46,6 @@ function App() {
   }
 
   return (
-<<<<<<< HEAD
-    <div className="app-container">
-      <CustomCursor />
-      <BackgroundCanvas />
-      
-      <AnimatePresence mode="wait">
-        {showSplash ? (
-          <motion.div
-            key="splash"
-            exit={{ opacity: 0, scale: 1.1 }}
-            transition={{ duration: 0.8, ease: "easeInOut" }}
-          >
-            <SplashScreen />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="main-ui"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 1 }}
-          >
-            <Navbar onOpenWaitlist={toggleModal} />
-            <SystemMonitor />
-            <main className="content-wrap">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={location.pathname}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.4 }}
-                >
-                  <Routes location={location} key={location.pathname}>
-                    <Route path="/" element={<Home onOpenWaitlist={toggleModal} />} />
-                    <Route path="/features" element={<FeaturesPage onOpenWaitlist={toggleModal} />} />
-                    <Route path="/faq" element={<FAQPage />} />
-                    <Route path="/wallet" element={<WalletPage />} />
-                  </Routes>
-                </motion.div>
-              </AnimatePresence>
-            </main>
-            <Footer />
-            <WaitlistModal isOpen={isModalOpen} onClose={toggleModal} />
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-=======
     <CoinProvider>
       <div className="app-container">
         <CustomCursor />
@@ -142,7 +94,6 @@ function App() {
         </AnimatePresence>
       </div>
     </CoinProvider>
->>>>>>> 0910c5aef3e52c74bae8ed950610bba69e0f4d49
   );
 }
 
