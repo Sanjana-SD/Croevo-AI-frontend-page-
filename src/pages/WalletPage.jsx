@@ -250,6 +250,51 @@ const WalletPage = () => {
             </div>
           </div>
 
+          {/* Section 1B: Coin Types Collection */}
+          <div className="wallet-panel coin-types-panel">
+            <h2 className="panel-heading">Multi-Coin Collection</h2>
+            <p className="panel-subheading">Collect different coin types in games for bonus rewards</p>
+            
+            <div className="coin-types-grid">
+              <div className="coin-type-card gold">
+                <div className="coin-icon">🪙</div>
+                <h3>Gold Coins</h3>
+                <p className="coin-desc">Standard currency</p>
+                <span className="coin-value">+1 CC</span>
+              </div>
+              <div className="coin-type-card diamond">
+                <div className="coin-icon">💎</div>
+                <h3>Diamond Coins</h3>
+                <p className="coin-desc">Rare & valuable</p>
+                <span className="coin-value">+5 CC</span>
+              </div>
+              <div className="coin-type-card emerald">
+                <div className="coin-icon">🟢</div>
+                <h3>Emerald Coins</h3>
+                <p className="coin-desc">Lucky multipliers</p>
+                <span className="coin-value">+2 CC × 1.5</span>
+              </div>
+              <div className="coin-type-card ruby">
+                <div className="coin-icon">💎</div>
+                <h3>Ruby Coins</h3>
+                <p className="coin-desc">Power boost coins</p>
+                <span className="coin-value">+3 CC</span>
+              </div>
+              <div className="coin-type-card sapphire">
+                <div className="coin-icon">🔵</div>
+                <h3>Sapphire Coins</h3>
+                <p className="coin-desc">Speed bonus rewards</p>
+                <span className="coin-value">+2 CC</span>
+              </div>
+              <div className="coin-type-card platinum">
+                <div className="coin-icon">⭐</div>
+                <h3>Platinum Coins</h3>
+                <p className="coin-desc">Legendary rarity</p>
+                <span className="coin-value">+10 CC</span>
+              </div>
+            </div>
+          </div>
+
           {/* Section 2: Rig levels & Upgrades */}
           <div className="wallet-panel mining-upgrades-panel">
             <h2 className="panel-heading">Rig Customizer</h2>

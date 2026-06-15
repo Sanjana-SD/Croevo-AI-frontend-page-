@@ -41,7 +41,9 @@ const GameLab = () => {
   const handleSubmit = () => {
     const text = prompt.trim() || 'asteroids';
     const builtin = isBuiltinPrompt(text);
-    navigate('/game', { state: { prompt: text, builtin } });
+    // Also include a URL query fallback so GamePage can recover if history state is lost
+    const params = new URLSearchParams({ prompt: text, builtin: builtin ? '1' : '0' });
+    navigate(`/game?${params.toString()}`, { state: { prompt: text, builtin } });
   };
 
   const handleKeyDown = (e) => {

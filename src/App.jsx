@@ -14,6 +14,7 @@ import FeaturesPage from './pages/FeaturesPage';
 import FAQPage from './pages/FAQPage';
 import GamePage from './pages/GamePage';
 import WalletPage from './pages/WalletPage';
+import ProfilePage from './pages/ProfilePage';
 
 function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -83,6 +84,7 @@ function App() {
                       <Route path="/features" element={<FeaturesPage onOpenWaitlist={toggleModal} />} />
                       <Route path="/faq" element={<FAQPage />} />
                       <Route path="/wallet" element={<WalletPage />} />
+                      <Route path="/profile" element={<ProfilePage />} />
                     </Routes>
                   </motion.div>
                 </AnimatePresence>

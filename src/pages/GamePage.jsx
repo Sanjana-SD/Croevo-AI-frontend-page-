@@ -1,132 +1,133 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { motion, useDragControls } from 'framer-motion';
-import { RotateCcw, Share2, Gamepad2, Loader, ArrowLeft, Coins, Shield, Zap, Sparkles, LayoutGrid, HelpCircle, Hammer, GripHorizontal } from 'lucide-react';
+import { RotateCcw, Gamepad2, ArrowLeft, Loader, Send, Sparkles, Settings, MessageSquare } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useDraggable } from '../hooks/useDraggable';
 import './GamePage.css';
 
 /* ══════════════════════════════════════════════
-   SYSTEM PROMPT FOR GEMINI
+   COLOR PALETTE & HELPERS
    ══════════════════════════════════════════════ */
-const SYSTEM_PROMPT = `You are a 2D browser game developer. When given a game idea, respond with ONLY a single self-contained HTML file that is a fully playable 2D game.
-
-Rules:
-- Use HTML5 Canvas and vanilla JavaScript ONLY — no external libraries, no imports, no CDN links.
-- The game must: have clear win/lose conditions or an infinite score loop, show score on the canvas, handle keyboard input (arrow keys or WASD), be under 500 lines, and start automatically on page load.
-- Use this exact color palette: background #050810, player #00e5ff, enemies/obstacles #ee4455, collectibles #ffaa00, platforms #1a3a6a, text #00e5ff.
-- Use the font family: "Orbitron", monospace for all canvas text.
-- The canvas should be 600×400 pixels.
-- Show a GAME OVER or YOU WIN overlay when the game ends, with the text "Press R to restart".
-- Listen for the R key to restart the game without reloading the page.
-- Wrap the game loop in try/catch so it never crashes.
-- Do NOT include any explanation, markdown, or code fences — respond with raw HTML only, starting with <!DOCTYPE html>.`;
-
-/* ── keyword → game resolver (for quick chips / fallback) ── */
-const KEYWORD_MAP = [
-  { keys: ['snake', 'worm', 'slither'], game: 'snake' },
-  { keys: ['brick', 'breaker', 'paddle', 'pong', 'ball'], game: 'brickbreaker' },
-  { keys: ['platform', 'jump', 'run', 'hop', 'gap', 'climb'], game: 'platformer' },
-  { keys: ['space', 'invader', 'shoot', 'laser', 'alien', 'bullet', 'gun', 'war'], game: 'spaceinvaders' },
-  { keys: ['coin', 'collect', 'gold', 'pickup', 'treasure'], game: 'coincollector' },
-];
-
-function resolveGame(prompt) {
-  const lower = prompt.toLowerCase();
-  for (const entry of KEYWORD_MAP) {
-    for (const kw of entry.keys) {
-      if (lower.includes(kw)) return entry.game;
-    }
-  }
-  return 'asteroids';
-}
-
-/* ── colour palette shared by all built-in games ── */
 const C = {
   bg: '#050810',
   player: '#00e5ff',
-  enemy: '#e45',
-  collectible: '#fa0',
+  enemy: '#ee4455',
+  collectible: '#ffaa00',
   platform: '#1a3a6a',
   text: '#00e5ff',
-  dim: '#7eb8cc',
-  white: '#fff',
+  white: '#ffffff',
 };
 
-const FONT = '"Orbitron", monospace';
-
-/* ══════════════════════════════════════════════
-   BUILT-IN GAME IMPLEMENTATIONS
-   ══════════════════════════════════════════════ */
-
-function clearCanvas(ctx, w, h) {
+function clearCanvas(ctx, W, H) {
   ctx.fillStyle = C.bg;
-  ctx.fillRect(0, 0, w, h);
+  ctx.fillRect(0, 0, W, H);
 }
+
 function drawText(ctx, text, x, y, size = 14, color = C.text, align = 'left') {
   ctx.fillStyle = color;
-  ctx.font = `${size}px ${FONT}`;
+  ctx.font = `${size}px Orbitron, monospace`;
   ctx.textAlign = align;
   ctx.fillText(text, x, y);
-}
-function drawOverlay(ctx, w, h, line1, line2) {
-  ctx.fillStyle = 'rgba(5,8,16,0.82)';
-  ctx.fillRect(0, 0, w, h);
-  drawText(ctx, line1, w / 2, h / 2 - 14, 26, C.text, 'center');
-  drawText(ctx, line2, w / 2, h / 2 + 22, 13, C.dim, 'center');
+  ctx.textAlign = 'left';
 }
 
-/* ═════ 1. ASTEROID DODGE ═════ */
+function drawOverlay(ctx, W, H, title, subtitle) {
+  ctx.fillStyle = 'rgba(5, 8, 16, 0.9)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = C.text;
+  ctx.font = `26px Orbitron, monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText(title, W / 2, H / 2 - 20);
+  ctx.font = `13px Orbitron, monospace`;
+  ctx.fillText(subtitle, W / 2, H / 2 + 20);
+  ctx.textAlign = 'left';
+}
+
+/* ═════ 1. ASTEROIDS ═════ */
 function startAsteroids(canvas, keys, onScore, options = {}) {
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
-  let ship = { x: W / 2 - 15, y: H - 50, w: 30, h: 20 };
-  let rocks = [];
-  let score = 0, lives = options.hasShield ? 5 : 3, over = false, frame = 0;
-  const speedMultiplier = options.speedHack ? 0.6 : 1;
-  const spawnRate = () => Math.max(18, 50 - Math.floor(score / 5));
-  function reset() { 
-    ship.x = W / 2 - 15; 
-    rocks = []; 
-    score = 0; 
-    lives = options.hasShield ? 5 : 3; 
-    over = false; 
-    frame = 0; 
-    if (onScore) onScore(0); 
+  let ship, rocks, bullets, score, lives, over, frame, shieldUsed = false;
+
+  function reset() {
+    ship = { x: W / 2, y: H / 2, w: 20, h: 20, angle: 0, vx: 0, vy: 0 };
+    rocks = [];
+    for (let i = 0; i < 4; i++) rocks.push({ x: Math.random() * W, y: Math.random() * (H / 2), w: 40, h: 40, vx: (Math.random() - 0.5) * 3, vy: (Math.random() - 0.5) * 3 });
+    bullets = [];
+    score = 0;
+    lives = 3;
+    over = false;
+    frame = 0;
+    shieldUsed = false;
+    if (onScore) onScore(score);
   }
+  reset();
+
   function tick() {
     if (over) { if (keys['r'] || keys['R']) reset(); drawOverlay(ctx, W, H, 'GAME OVER', `Score: ${score}  —  Press R to restart`); return; }
-    if (keys['ArrowLeft'] || keys['a']) ship.x -= 5;
-    if (keys['ArrowRight'] || keys['d']) ship.x += 5;
-    ship.x = Math.max(0, Math.min(W - ship.w, ship.x));
-    if (frame % spawnRate() === 0) { 
-      const rw = 18 + Math.random() * 22; 
-      rocks.push({ x: Math.random() * (W - rw), y: -20, w: rw, h: rw, speed: (2 + Math.random() * 2 + score * 0.05) * speedMultiplier }); 
-    }
-    rocks.forEach(r => { r.y += r.speed; });
-    rocks = rocks.filter(r => { 
-      if (r.y > H) return false; 
-      if (r.x < ship.x + ship.w && r.x + r.w > ship.x && r.y < ship.y + ship.h && r.y + r.h > ship.y) { 
-        lives--; 
-        if (onScore) onScore(score); 
-        if (lives <= 0) over = true; 
-        return false; 
-      } 
-      return true; 
+
+    if (keys['ArrowLeft'] || keys['a']) ship.angle -= 6;
+    if (keys['ArrowRight'] || keys['d']) ship.angle += 6;
+    if (keys['ArrowUp'] || keys['w']) { ship.vx += Math.cos(ship.angle * Math.PI / 180) * 0.5; ship.vy += Math.sin(ship.angle * Math.PI / 180) * 0.5; }
+    if (keys[' '] && frame % 12 === 0) bullets.push({ x: ship.x, y: ship.y, vx: Math.cos(ship.angle * Math.PI / 180) * 5, vy: Math.sin(ship.angle * Math.PI / 180) * 5 });
+
+    ship.x += ship.vx; ship.y += ship.vy; ship.vx *= 0.99; ship.vy *= 0.99;
+    if (ship.x < 0) ship.x = W; if (ship.x > W) ship.x = 0;
+    if (ship.y < 0) ship.y = H; if (ship.y > H) ship.y = 0;
+
+    bullets.forEach((b, i) => { b.x += b.vx; b.y += b.vy; if (b.x < 0 || b.x > W || b.y < 0 || b.y > H) bullets.splice(i, 1); });
+
+    rocks.forEach((r, ri) => {
+      r.x += r.vx; r.y += r.vy;
+      if (r.x < 0) r.x = W; if (r.x > W) r.x = 0;
+      if (r.y < 0) r.y = H; if (r.y > H) r.y = 0;
+
+      bullets.forEach((b, bi) => {
+        if (Math.hypot(b.x - (r.x + r.w / 2), b.y - (r.y + r.h / 2)) < r.w / 2) {
+          score += 25;
+          if (onScore) onScore(score);
+          bullets.splice(bi, 1);
+          if (r.w > 20) {
+            rocks.push({ x: r.x, y: r.y, w: r.w / 2, h: r.h / 2, vx: (Math.random() - 0.5) * 3, vy: (Math.random() - 0.5) * 3 });
+            rocks.push({ x: r.x, y: r.y, w: r.w / 2, h: r.h / 2, vx: (Math.random() - 0.5) * 3, vy: (Math.random() - 0.5) * 3 });
+          }
+          rocks.splice(ri, 1);
+        }
+      });
+
+      if (Math.hypot(ship.x - (r.x + r.w / 2), ship.y - (r.y + r.h / 2)) < r.w / 2 + 10) {
+        if (options.hasShield && !shieldUsed) {
+          shieldUsed = true;
+        } else {
+          lives--;
+          if (lives <= 0) over = true;
+          else { ship.x = W / 2; ship.y = H / 2; ship.vx = 0; ship.vy = 0; }
+        }
+      }
     });
-    if (frame % 30 === 0 && !over) { score++; if (onScore) onScore(score); }
+
+    if (rocks.length === 0 && frame % 30 === 0) {
+      for (let i = 0; i < 4; i++) rocks.push({ x: Math.random() * W, y: Math.random() * (H / 2), w: 40, h: 40, vx: (Math.random() - 0.5) * 3, vy: (Math.random() - 0.5) * 3 });
+    }
+
     frame++;
     clearCanvas(ctx, W, H);
-    
-    // Draw Shield visual
-    if (options.hasShield) {
-      ctx.strokeStyle = 'rgba(0, 229, 255, 0.6)';
-      ctx.lineWidth = 2;
+    ctx.fillStyle = C.player;
+    ctx.beginPath();
+    ctx.moveTo(ship.x + ship.w / 2, ship.y);
+    ctx.lineTo(ship.x, ship.y + ship.h);
+    ctx.lineTo(ship.x + ship.w, ship.y + ship.h);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowColor = C.player;
+    ctx.shadowBlur = 10;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = C.enemy;
+    rocks.forEach(r => {
       ctx.beginPath();
-      ctx.arc(ship.x + ship.w / 2, ship.y + ship.h / 2, 24, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    
-    ctx.fillStyle = C.player; ctx.beginPath(); ctx.moveTo(ship.x + ship.w / 2, ship.y); ctx.lineTo(ship.x, ship.y + ship.h); ctx.lineTo(ship.x + ship.w, ship.y + ship.h); ctx.closePath(); ctx.fill(); ctx.shadowColor = C.player; ctx.shadowBlur = 10; ctx.fill(); ctx.shadowBlur = 0;
-    ctx.fillStyle = C.enemy; rocks.forEach(r => { ctx.beginPath(); ctx.arc(r.x + r.w / 2, r.y + r.h / 2, r.w / 2, 0, Math.PI * 2); ctx.fill(); });
+      ctx.arc(r.x + r.w / 2, r.y + r.h / 2, r.w / 2, 0, Math.PI * 2);
+      ctx.fill();
+    });
     drawText(ctx, `SCORE: ${score}`, 12, 24, 14);
     drawText(ctx, `LIVES: ${'♥'.repeat(lives)}`, W - 12, 24, 14, lives === 1 ? C.enemy : C.text, 'right');
   }
@@ -141,34 +142,48 @@ function startSnake(canvas, keys, onScore, options = {}) {
   const cols = Math.floor(W / SZ), rows = Math.floor(H / SZ);
   let snake, dir, food, score, over, frame, dirQueue, shieldUsed = false;
   const speedScale = options.speedHack ? 1.4 : 1;
-  function placeFood() { let fx, fy; do { fx = Math.floor(Math.random() * cols); fy = Math.floor(Math.random() * rows); } while (snake.some(s => s.x === fx && s.y === fy)); return { x: fx, y: fy }; }
-  function reset() { 
-    const cx = Math.floor(cols / 2), cy = Math.floor(rows / 2); 
-    snake = [{ x: cx, y: cy }, { x: cx - 1, y: cy }, { x: cx - 2, y: cy }]; 
-    dir = { x: 1, y: 0 }; 
-    dirQueue = []; 
-    food = placeFood(); 
-    score = 0; 
-    over = false; 
-    frame = 0; 
+
+  function placeFood() {
+    let fx, fy;
+    do {
+      fx = Math.floor(Math.random() * cols);
+      fy = Math.floor(Math.random() * rows);
+    } while (snake.some(s => s.x === fx && s.y === fy));
+    return { x: fx, y: fy };
+  }
+
+  function reset() {
+    const cx = Math.floor(cols / 2), cy = Math.floor(rows / 2);
+    snake = [{ x: cx, y: cy }, { x: cx - 1, y: cy }, { x: cx - 2, y: cy }];
+    dir = { x: 1, y: 0 };
+    dirQueue = [];
+    food = placeFood();
+    score = 0;
+    over = false;
+    frame = 0;
     shieldUsed = false;
-    if (onScore) onScore(0); 
+    if (onScore) onScore(0);
   }
   reset();
+
   function tick() {
-    if (over) { if (keys['r'] || keys['R']) reset(); drawOverlay(ctx, W, H, 'GAME OVER', `Score: ${score}  —  Press R to restart`); return; }
+    if (over) {
+      if (keys['r'] || keys['R']) reset();
+      drawOverlay(ctx, W, H, 'GAME OVER', `Score: ${score}  —  Press R to restart`);
+      return;
+    }
+
     if ((keys['ArrowUp'] || keys['w']) && dir.y === 0) dirQueue.push({ x: 0, y: -1 });
     else if ((keys['ArrowDown'] || keys['s']) && dir.y === 0) dirQueue.push({ x: 0, y: 1 });
     else if ((keys['ArrowLeft'] || keys['a']) && dir.x === 0) dirQueue.push({ x: -1, y: 0 });
     else if ((keys['ArrowRight'] || keys['d']) && dir.x === 0) dirQueue.push({ x: 1, y: 0 });
-    
-    if (frame % Math.round(8 * speedScale) === 0) { 
-      if (dirQueue.length) dir = dirQueue.shift(); 
-      const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y }; 
-      if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows || snake.some(s => s.x === head.x && s.y === head.y)) { 
+
+    if (frame % Math.round(8 * speedScale) === 0) {
+      if (dirQueue.length) dir = dirQueue.shift();
+      const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+      if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows || snake.some(s => s.x === head.x && s.y === head.y)) {
         if (options.hasShield && !shieldUsed) {
           shieldUsed = true;
-          // bounce back or turn to save
           if (dir.x !== 0) {
             dir = { x: 0, y: head.y <= 1 ? 1 : -1 };
           } else {
@@ -176,32 +191,45 @@ function startSnake(canvas, keys, onScore, options = {}) {
           }
           dirQueue = [];
         } else {
-          over = true; 
+          over = true;
         }
-      } else { 
-        snake.unshift(head); 
-        if (head.x === food.x && head.y === food.y) { 
-          score++; 
+      } else {
+        snake.unshift(head);
+        if (head.x === food.x && head.y === food.y) {
+          score++;
           if (onScore) onScore(score);
-          food = placeFood(); 
-        } else snake.pop(); 
-      } 
+          food = placeFood();
+        } else snake.pop();
+      }
     }
+
     frame++;
     clearCanvas(ctx, W, H);
-    ctx.strokeStyle = 'rgba(0,229,255,0.04)'; for (let i = 0; i <= cols; i++) { ctx.beginPath(); ctx.moveTo(i * SZ, 0); ctx.lineTo(i * SZ, H); ctx.stroke(); } for (let i = 0; i <= rows; i++) { ctx.beginPath(); ctx.moveTo(0, i * SZ); ctx.lineTo(W, i * SZ); ctx.stroke(); }
-    ctx.fillStyle = C.collectible; ctx.shadowColor = C.collectible; ctx.shadowBlur = 10; ctx.fillRect(food.x * SZ + 2, food.y * SZ + 2, SZ - 4, SZ - 4); ctx.shadowBlur = 0;
-    
-    snake.forEach((s, i) => { 
-      ctx.fillStyle = i === 0 ? C.player : `rgba(0,229,255,${0.9 - i * 0.02})`; 
-      ctx.fillRect(s.x * SZ + 1, s.y * SZ + 1, SZ - 2, SZ - 2); 
-      if (i === 0 && options.hasShield && !shieldUsed) {
-        ctx.strokeStyle = 'rgba(255, 234, 0, 0.8)';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(s.x * SZ - 2, s.y * SZ - 2, SZ + 4, SZ + 4);
-      }
+    ctx.strokeStyle = 'rgba(0,229,255,0.04)';
+    for (let i = 0; i <= cols; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * SZ, 0);
+      ctx.lineTo(i * SZ, H);
+      ctx.stroke();
+    }
+    for (let i = 0; i <= rows; i++) {
+      ctx.beginPath();
+      ctx.moveTo(0, i * SZ);
+      ctx.lineTo(W, i * SZ);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = C.collectible;
+    ctx.shadowColor = C.collectible;
+    ctx.shadowBlur = 10;
+    ctx.fillRect(food.x * SZ + 2, food.y * SZ + 2, SZ - 4, SZ - 4);
+    ctx.shadowBlur = 0;
+
+    snake.forEach((s, i) => {
+      ctx.fillStyle = i === 0 ? C.player : `rgba(0,229,255,${0.9 - i * 0.02})`;
+      ctx.fillRect(s.x * SZ + 1, s.y * SZ + 1, SZ - 2, SZ - 2);
     });
-    drawText(ctx, `SCORE: ${score}${options.hasShield && !shieldUsed ? ' (SHIELD)' : ''}`, 12, 24, 14);
+    drawText(ctx, `SCORE: ${score}`, 12, 24, 14);
   }
   return { tick, reset };
 }
@@ -213,50 +241,103 @@ function startBrickBreaker(canvas, keys, onScore, options = {}) {
   let paddle, ball, bricks, score, over, won, shieldUsed = false;
   const BRICK_ROWS = 5, BRICK_COLS = 10;
   const speedScale = options.speedHack ? 0.7 : 1;
-  function makeBricks() { const arr = []; const bw = (W - 40) / BRICK_COLS; const bh = 18; const colors = ['#e45', '#fa0', '#0f0', '#00e5ff', '#bc13fe']; for (let r = 0; r < BRICK_ROWS; r++) { for (let c = 0; c < BRICK_COLS; c++) { arr.push({ x: 20 + c * bw, y: 50 + r * (bh + 4), w: bw - 4, h: bh, alive: true, color: colors[r] }); } } return arr; }
-  function reset() { 
-    paddle = { x: W / 2 - 45, y: H - 30, w: 90, h: 12 }; 
-    ball = { x: W / 2, y: H - 50, r: 7, dx: 3 * speedScale, dy: -3 * speedScale }; 
-    bricks = makeBricks(); 
-    score = 0; 
-    over = false; 
-    won = false; 
+
+  function makeBricks() {
+    const arr = [];
+    const bw = (W - 40) / BRICK_COLS;
+    const bh = 18;
+    const colors = ['#e45', '#fa0', '#0f0', '#00e5ff', '#bc13fe'];
+    for (let r = 0; r < BRICK_ROWS; r++) {
+      for (let c = 0; c < BRICK_COLS; c++) {
+        arr.push({
+          x: 20 + c * bw,
+          y: 50 + r * (bh + 4),
+          w: bw - 4,
+          h: bh,
+          alive: true,
+          color: colors[r]
+        });
+      }
+    }
+    return arr;
+  }
+
+  function reset() {
+    paddle = { x: W / 2 - 45, y: H - 30, w: 90, h: 12 };
+    ball = { x: W / 2, y: H - 50, r: 7, dx: 3 * speedScale, dy: -3 * speedScale };
+    bricks = makeBricks();
+    score = 0;
+    over = false;
+    won = false;
     shieldUsed = false;
     if (onScore) onScore(0);
   }
   reset();
+
   function tick() {
-    if (over || won) { if (keys['r'] || keys['R']) reset(); drawOverlay(ctx, W, H, won ? 'YOU WIN!' : 'GAME OVER', `Score: ${score}  —  Press R to restart`); return; }
-    if (keys['ArrowLeft'] || keys['a']) paddle.x -= 6; if (keys['ArrowRight'] || keys['d']) paddle.x += 6; paddle.x = Math.max(0, Math.min(W - paddle.w, paddle.x));
-    ball.x += ball.dx; ball.y += ball.dy; if (ball.x - ball.r < 0 || ball.x + ball.r > W) ball.dx *= -1; if (ball.y - ball.r < 0) ball.dy *= -1; 
-    if (ball.y + ball.r > H) { 
+    if (over || won) {
+      if (keys['r'] || keys['R']) reset();
+      drawOverlay(ctx, W, H, won ? 'YOU WIN!' : 'GAME OVER', `Score: ${score}  —  Press R to restart`);
+      return;
+    }
+
+    if (keys['ArrowLeft'] || keys['a']) paddle.x -= 6;
+    if (keys['ArrowRight'] || keys['d']) paddle.x += 6;
+    paddle.x = Math.max(0, Math.min(W - paddle.w, paddle.x));
+
+    ball.x += ball.dx;
+    ball.y += ball.dy;
+    if (ball.x - ball.r < 0 || ball.x + ball.r > W) ball.dx *= -1;
+    if (ball.y - ball.r < 0) ball.dy *= -1;
+
+    if (ball.y + ball.r > H) {
       if (options.hasShield && !shieldUsed) {
         shieldUsed = true;
         ball.dy *= -1;
         ball.y = paddle.y - 12;
       } else {
-        over = true; 
-        return; 
+        over = true;
+        return;
       }
     }
-    if (ball.dy > 0 && ball.y + ball.r >= paddle.y && ball.x >= paddle.x && ball.x <= paddle.x + paddle.w && ball.y + ball.r <= paddle.y + paddle.h + 6) { ball.dy *= -1; ball.dx += (ball.x - (paddle.x + paddle.w / 2)) * 0.08; }
-    let allDead = true; bricks.forEach(b => { if (!b.alive) return; allDead = false; if (ball.x + ball.r > b.x && ball.x - ball.r < b.x + b.w && ball.y + ball.r > b.y && ball.y - ball.r < b.y + b.h) { b.alive = false; score += 10; if (onScore) onScore(score); ball.dy *= -1; } }); if (allDead) won = true;
-    clearCanvas(ctx, W, H);
-    bricks.forEach(b => { if (!b.alive) return; ctx.fillStyle = b.color; ctx.fillRect(b.x, b.y, b.w, b.h); });
-    
-    // Draw bottom safety net for shield
-    if (options.hasShield && !shieldUsed) {
-      ctx.strokeStyle = 'rgba(0, 229, 255, 0.4)';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(0, H - 4);
-      ctx.lineTo(W, H - 4);
-      ctx.stroke();
+
+    if (ball.dy > 0 && ball.y + ball.r >= paddle.y && ball.x >= paddle.x && ball.x <= paddle.x + paddle.w && ball.y + ball.r <= paddle.y + paddle.h + 6) {
+      ball.dy *= -1;
+      ball.dx += (ball.x - (paddle.x + paddle.w / 2)) * 0.08;
     }
-    
-    ctx.fillStyle = C.player; ctx.shadowColor = C.player; ctx.shadowBlur = 8; ctx.fillRect(paddle.x, paddle.y, paddle.w, paddle.h); ctx.shadowBlur = 0;
-    ctx.fillStyle = C.white; ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2); ctx.fill();
-    drawText(ctx, `SCORE: ${score}${options.hasShield && !shieldUsed ? ' (SHIELD)' : ''}`, 12, 24, 14);
+
+    let allDead = true;
+    bricks.forEach(b => {
+      if (!b.alive) return;
+      allDead = false;
+      if (ball.x + ball.r > b.x && ball.x - ball.r < b.x + b.w && ball.y + ball.r > b.y && ball.y - ball.r < b.y + b.h) {
+        b.alive = false;
+        score += 10;
+        if (onScore) onScore(score);
+        ball.dy *= -1;
+      }
+    });
+    if (allDead) won = true;
+
+    clearCanvas(ctx, W, H);
+    bricks.forEach(b => {
+      if (!b.alive) return;
+      ctx.fillStyle = b.color;
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+    });
+
+    ctx.fillStyle = C.player;
+    ctx.shadowColor = C.player;
+    ctx.shadowBlur = 8;
+    ctx.fillRect(paddle.x, paddle.y, paddle.w, paddle.h);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = C.white;
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+    ctx.fill();
+
+    drawText(ctx, `SCORE: ${score}`, 12, 24, 14);
   }
   return { tick, reset };
 }
@@ -267,50 +348,117 @@ function startPlatformer(canvas, keys, onScore, options = {}) {
   const W = canvas.width, H = canvas.height;
   const G = options.speedHack ? 0.35 : 0.5;
   let player, platforms, coins, score, over, frame, shieldUsed = false;
-  function makePlatforms() { const p = [{ x: 0, y: H - 20, w: W, h: 20 }]; for (let i = 0; i < 7; i++) { p.push({ x: 40 + Math.random() * (W - 160), y: H - 70 - i * 50, w: 80 + Math.random() * 60, h: 14 }); } return p; }
-  function makeCoins(plats) { return plats.slice(1).map(p => ({ x: p.x + p.w / 2, y: p.y - 18, r: 8, alive: true })); }
-  function reset() { 
-    platforms = makePlatforms(); 
-    coins = makeCoins(platforms); 
-    player = { x: W / 2 - 10, y: H - 50, w: 20, h: 26, vx: 0, vy: 0, onGround: false }; 
-    score = 0; 
-    over = false; 
-    frame = 0; 
+
+  function makePlatforms() {
+    const p = [{ x: 0, y: H - 20, w: W, h: 20 }];
+    for (let i = 0; i < 7; i++) {
+      p.push({
+        x: 40 + Math.random() * (W - 160),
+        y: H - 70 - i * 50,
+        w: 80 + Math.random() * 60,
+        h: 14
+      });
+    }
+    return p;
+  }
+
+  function makeCoins(plats) {
+    return plats.slice(1).map(p => ({
+      x: p.x + p.w / 2,
+      y: p.y - 18,
+      r: 8,
+      alive: true
+    }));
+  }
+
+  function reset() {
+    platforms = makePlatforms();
+    coins = makeCoins(platforms);
+    player = { x: W / 2 - 10, y: H - 50, w: 20, h: 26, vx: 0, vy: 0, onGround: false };
+    score = 0;
+    over = false;
+    frame = 0;
     shieldUsed = false;
     if (onScore) onScore(0);
   }
   reset();
+
   function tick() {
-    if (over) { if (keys['r'] || keys['R']) reset(); drawOverlay(ctx, W, H, coins.every(c => !c.alive) ? 'YOU WIN!' : 'GAME OVER', `Coins: ${score}  —  Press R to restart`); return; }
-    player.vx = 0; if (keys['ArrowLeft'] || keys['a']) player.vx = options.speedHack ? -6 : -4; if (keys['ArrowRight'] || keys['d']) player.vx = options.speedHack ? 6 : 4;
-    if ((keys['ArrowUp'] || keys['w'] || keys[' ']) && player.onGround) { player.vy = options.speedHack ? -11 : -10; player.onGround = false; }
-    player.vy += G; player.x += player.vx; player.y += player.vy;
-    player.onGround = false; platforms.forEach(p => { if (player.vy >= 0 && player.x + player.w > p.x && player.x < p.x + p.w && player.y + player.h >= p.y && player.y + player.h <= p.y + p.h + 8) { player.y = p.y - player.h; player.vy = 0; player.onGround = true; } });
-    if (player.x < 0) player.x = 0; if (player.x + player.w > W) player.x = W - player.w; 
-    if (player.y > H + 40) { 
+    if (over) {
+      if (keys['r'] || keys['R']) reset();
+      drawOverlay(ctx, W, H, coins.every(c => !c.alive) ? 'YOU WIN!' : 'GAME OVER', `Coins: ${score}  —  Press R to restart`);
+      return;
+    }
+
+    player.vx = 0;
+    if (keys['ArrowLeft'] || keys['a']) player.vx = options.speedHack ? -6 : -4;
+    if (keys['ArrowRight'] || keys['d']) player.vx = options.speedHack ? 6 : 4;
+    if ((keys['ArrowUp'] || keys['w'] || keys[' ']) && player.onGround) {
+      player.vy = options.speedHack ? -11 : -10;
+      player.onGround = false;
+    }
+
+    player.vy += G;
+    player.x += player.vx;
+    player.y += player.vy;
+
+    player.onGround = false;
+    platforms.forEach(p => {
+      if (player.vy >= 0 && player.x + player.w > p.x && player.x < p.x + p.w && player.y + player.h >= p.y && player.y + player.h <= p.y + p.h + 8) {
+        player.y = p.y - player.h;
+        player.vy = 0;
+        player.onGround = true;
+      }
+    });
+
+    if (player.x < 0) player.x = 0;
+    if (player.x + player.w > W) player.x = W - player.w;
+
+    if (player.y > H + 40) {
       if (options.hasShield && !shieldUsed) {
         shieldUsed = true;
         player.x = W / 2;
         player.y = H - 80;
         player.vy = -6;
       } else {
-        over = true; 
+        over = true;
       }
     }
-    coins.forEach(c => { if (!c.alive) return; const dx = (player.x + player.w / 2) - c.x, dy = (player.y + player.h / 2) - c.y; if (Math.sqrt(dx * dx + dy * dy) < c.r + 12) { c.alive = false; score++; if (onScore) onScore(score); } });
+
+    coins.forEach(c => {
+      if (!c.alive) return;
+      const dx = (player.x + player.w / 2) - c.x, dy = (player.y + player.h / 2) - c.y;
+      if (Math.sqrt(dx * dx + dy * dy) < c.r + 12) {
+        c.alive = false;
+        score++;
+        if (onScore) onScore(score);
+      }
+    });
+
     if (coins.every(c => !c.alive)) over = true;
+
     frame++;
     clearCanvas(ctx, W, H);
-    ctx.fillStyle = C.platform; platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
-    coins.forEach(c => { if (!c.alive) return; ctx.fillStyle = C.collectible; ctx.shadowColor = C.collectible; ctx.shadowBlur = 12; ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; });
-    
-    // Draw player and shield
-    ctx.fillStyle = C.player; ctx.shadowColor = C.player; ctx.shadowBlur = 8; ctx.fillRect(player.x, player.y, player.w, player.h); ctx.shadowBlur = 0;
-    if (options.hasShield && !shieldUsed) {
-      ctx.strokeStyle = 'rgba(0, 229, 255, 0.7)';
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(player.x - 3, player.y - 3, player.w + 6, player.h + 6);
-    }
+    ctx.fillStyle = C.platform;
+    platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
+
+    coins.forEach(c => {
+      if (!c.alive) return;
+      ctx.fillStyle = C.collectible;
+      ctx.shadowColor = C.collectible;
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    });
+
+    ctx.fillStyle = C.player;
+    ctx.shadowColor = C.player;
+    ctx.shadowBlur = 8;
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    ctx.shadowBlur = 0;
+
     drawText(ctx, `COINS: ${score}/${coins.length}`, 12, 24, 14);
   }
   return { tick, reset };
@@ -322,65 +470,138 @@ function startSpaceInvaders(canvas, keys, onScore, options = {}) {
   const W = canvas.width, H = canvas.height;
   let ship, bullets, enemies, enemyBullets, score, over, won, frame, eDir, eSpeed, shieldUsed = false;
   const speedScale = options.speedHack ? 0.6 : 1;
-  function makeEnemies() { const arr = []; for (let r = 0; r < 4; r++) { for (let c = 0; c < 8; c++) { arr.push({ x: 50 + c * 52, y: 40 + r * 36, w: 30, h: 20, alive: true }); } } return arr; }
-  function reset() { 
-    ship = { x: W / 2 - 15, y: H - 40, w: 30, h: 18 }; 
-    bullets = []; 
-    enemyBullets = []; 
-    enemies = makeEnemies(); 
-    score = 0; 
-    over = false; 
-    won = false; 
-    frame = 0; 
-    eDir = 1; 
-    eSpeed = 0.4 * speedScale; 
+
+  function makeEnemies() {
+    const arr = [];
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 8; c++) {
+        arr.push({
+          x: 50 + c * 52,
+          y: 40 + r * 36,
+          w: 30,
+          h: 20,
+          alive: true
+        });
+      }
+    }
+    return arr;
+  }
+
+  function reset() {
+    ship = { x: W / 2 - 15, y: H - 40, w: 30, h: 18 };
+    bullets = [];
+    enemyBullets = [];
+    enemies = makeEnemies();
+    score = 0;
+    over = false;
+    won = false;
+    frame = 0;
+    eDir = 1;
+    eSpeed = 0.4 * speedScale;
     shieldUsed = false;
     if (onScore) onScore(0);
   }
   reset();
+
   function tick() {
-    if (over || won) { if (keys['r'] || keys['R']) reset(); drawOverlay(ctx, W, H, won ? 'YOU WIN!' : 'GAME OVER', `Score: ${score}  —  Press R to restart`); return; }
-    if (keys['ArrowLeft'] || keys['a']) ship.x -= 5; if (keys['ArrowRight'] || keys['d']) ship.x += 5; ship.x = Math.max(0, Math.min(W - ship.w, ship.x));
-    if (keys[' '] && frame % 12 === 0) { bullets.push({ x: ship.x + ship.w / 2 - 2, y: ship.y - 6, w: 4, h: 10 }); }
-    bullets.forEach(b => b.y -= 6); bullets = bullets.filter(b => b.y > -10);
-    let hitEdge = false; const alive = enemies.filter(e => e.alive); alive.forEach(e => { e.x += eDir * eSpeed; if (e.x <= 5 || e.x + e.w >= W - 5) hitEdge = true; }); if (hitEdge) { eDir *= -1; alive.forEach(e => e.y += 12); eSpeed += 0.05 * speedScale; }
-    if (frame % 60 === 0 && alive.length) { const shooter = alive[Math.floor(Math.random() * alive.length)]; enemyBullets.push({ x: shooter.x + shooter.w / 2 - 2, y: shooter.y + shooter.h, w: 4, h: 8 }); } enemyBullets.forEach(b => b.y += 3.5 * speedScale); enemyBullets = enemyBullets.filter(b => b.y < H + 10);
-    bullets.forEach(b => { enemies.forEach(e => { if (e.alive && b.x < e.x + e.w && b.x + b.w > e.x && b.y < e.y + e.h && b.y + b.h > e.y) { e.alive = false; score += 25; if (onScore) onScore(score); b.y = -999; } }); });
-    enemyBullets.forEach(b => { 
-      if (b.x < ship.x + ship.w && b.x + b.w > ship.x && b.y < ship.y + ship.h && b.y + b.h > ship.y) { 
+    if (over || won) {
+      if (keys['r'] || keys['R']) reset();
+      drawOverlay(ctx, W, H, won ? 'YOU WIN!' : 'GAME OVER', `Score: ${score}  —  Press R to restart`);
+      return;
+    }
+
+    if (keys['ArrowLeft'] || keys['a']) ship.x -= 5;
+    if (keys['ArrowRight'] || keys['d']) ship.x += 5;
+    ship.x = Math.max(0, Math.min(W - ship.w, ship.x));
+
+    if (keys[' '] && frame % 12 === 0) {
+      bullets.push({ x: ship.x + ship.w / 2 - 2, y: ship.y - 6, w: 4, h: 10 });
+    }
+
+    bullets.forEach(b => b.y -= 6);
+    bullets = bullets.filter(b => b.y > -10);
+
+    let hitEdge = false;
+    const alive = enemies.filter(e => e.alive);
+    alive.forEach(e => {
+      e.x += eDir * eSpeed;
+      if (e.x <= 5 || e.x + e.w >= W - 5) hitEdge = true;
+    });
+
+    if (hitEdge) {
+      eDir *= -1;
+      alive.forEach(e => e.y += 12);
+      eSpeed += 0.05 * speedScale;
+    }
+
+    if (frame % 60 === 0 && alive.length) {
+      const shooter = alive[Math.floor(Math.random() * alive.length)];
+      enemyBullets.push({ x: shooter.x + shooter.w / 2 - 2, y: shooter.y + shooter.h, w: 4, h: 8 });
+    }
+
+    enemyBullets.forEach(b => b.y += 3.5 * speedScale);
+    enemyBullets = enemyBullets.filter(b => b.y < H + 10);
+
+    bullets.forEach(b => {
+      enemies.forEach(e => {
+        if (e.alive && b.x < e.x + e.w && b.x + b.w > e.x && b.y < e.y + e.h && b.y + b.h > e.y) {
+          e.alive = false;
+          score += 25;
+          if (onScore) onScore(score);
+          b.y = -999;
+        }
+      });
+    });
+
+    enemyBullets.forEach(b => {
+      if (b.x < ship.x + ship.w && b.x + b.w > ship.x && b.y < ship.y + ship.h && b.y + b.h > ship.y) {
         if (options.hasShield && !shieldUsed) {
           shieldUsed = true;
           b.y = H + 999;
         } else {
-          over = true; 
+          over = true;
         }
-      } 
+      }
     });
+
     if (alive.some(e => e.y + e.h >= ship.y)) {
       if (options.hasShield && !shieldUsed) {
         shieldUsed = true;
-        alive.forEach(e => { e.y -= 40; });
+        alive.forEach(e => {
+          e.y -= 40;
+        });
       } else {
         over = true;
       }
     }
+
     if (alive.length === 0) won = true;
+
     frame++;
     clearCanvas(ctx, W, H);
-    ctx.fillStyle = C.player; ctx.shadowColor = C.player; ctx.shadowBlur = 8; ctx.beginPath(); ctx.moveTo(ship.x + ship.w / 2, ship.y); ctx.lineTo(ship.x, ship.y + ship.h); ctx.lineTo(ship.x + ship.w, ship.y + ship.h); ctx.closePath(); ctx.fill(); ctx.shadowBlur = 0;
-    
-    // Draw Shield visual
-    if (options.hasShield && !shieldUsed) {
-      ctx.strokeStyle = 'rgba(0, 229, 255, 0.6)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(ship.x + ship.w / 2, ship.y + ship.h / 2, 22, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    
-    ctx.fillStyle = C.player; bullets.forEach(b => ctx.fillRect(b.x, b.y, b.w, b.h));
-    ctx.fillStyle = C.enemy; enemies.forEach(e => { if (e.alive) ctx.fillRect(e.x, e.y, e.w, e.h); });
-    ctx.fillStyle = '#f55'; enemyBullets.forEach(b => ctx.fillRect(b.x, b.y, b.w, b.h));
+
+    ctx.fillStyle = C.player;
+    ctx.shadowColor = C.player;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(ship.x + ship.w / 2, ship.y);
+    ctx.lineTo(ship.x, ship.y + ship.h);
+    ctx.lineTo(ship.x + ship.w, ship.y + ship.h);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = C.player;
+    bullets.forEach(b => ctx.fillRect(b.x, b.y, b.w, b.h));
+
+    ctx.fillStyle = C.enemy;
+    enemies.forEach(e => {
+      if (e.alive) ctx.fillRect(e.x, e.y, e.w, e.h);
+    });
+
+    ctx.fillStyle = '#f55';
+    enemyBullets.forEach(b => ctx.fillRect(b.x, b.y, b.w, b.h));
+
     drawText(ctx, `SCORE: ${score}`, 12, 24, 14);
   }
   return { tick, reset };
@@ -392,53 +613,116 @@ function startCoinCollector(canvas, keys, onScore, options = {}) {
   const W = canvas.width, H = canvas.height;
   let player, coins, obstacles, score, over, won, totalCoins, frame, shieldUsed = false;
   const speedScale = options.speedHack ? 0.65 : 1;
-  function makeCoins(n) { const arr = []; for (let i = 0; i < n; i++) { arr.push({ x: 30 + Math.random() * (W - 60), y: 30 + Math.random() * (H - 60), r: 8, alive: true }); } return arr; }
-  function makeObstacles(n) { const arr = []; for (let i = 0; i < n; i++) { arr.push({ x: 40 + Math.random() * (W - 80), y: 40 + Math.random() * (H - 80), w: 14, h: 14, dx: (Math.random() - 0.5) * 2.5 * speedScale, dy: (Math.random() - 0.5) * 2.5 * speedScale }); } return arr; }
-  function reset() { 
-    player = { x: W / 2 - 10, y: H / 2 - 10, w: 20, h: 20 }; 
-    totalCoins = 12; 
-    coins = makeCoins(totalCoins); 
-    obstacles = makeObstacles(5); 
-    score = 0; 
-    over = false; 
-    won = false; 
-    frame = 0; 
+
+  function makeCoins(n) {
+    const arr = [];
+    for (let i = 0; i < n; i++) {
+      arr.push({
+        x: 30 + Math.random() * (W - 60),
+        y: 30 + Math.random() * (H - 60),
+        r: 8,
+        alive: true
+      });
+    }
+    return arr;
+  }
+
+  function makeObstacles(n) {
+    const arr = [];
+    for (let i = 0; i < n; i++) {
+      arr.push({
+        x: 40 + Math.random() * (W - 80),
+        y: 40 + Math.random() * (H - 80),
+        w: 14,
+        h: 14,
+        dx: (Math.random() - 0.5) * 2.5 * speedScale,
+        dy: (Math.random() - 0.5) * 2.5 * speedScale
+      });
+    }
+    return arr;
+  }
+
+  function reset() {
+    player = { x: W / 2 - 10, y: H / 2 - 10, w: 20, h: 20 };
+    totalCoins = 12;
+    coins = makeCoins(totalCoins);
+    obstacles = makeObstacles(5);
+    score = 0;
+    over = false;
+    won = false;
+    frame = 0;
     shieldUsed = false;
     if (onScore) onScore(0);
   }
   reset();
+
   function tick() {
-    if (over || won) { if (keys['r'] || keys['R']) reset(); drawOverlay(ctx, W, H, won ? 'YOU WIN!' : 'GAME OVER', `Coins: ${score}/${totalCoins}  —  Press R to restart`); return; }
-    if (keys['ArrowLeft'] || keys['a']) player.x -= 4; if (keys['ArrowRight'] || keys['d']) player.x += 4; if (keys['ArrowUp'] || keys['w']) player.y -= 4; if (keys['ArrowDown'] || keys['s']) player.y += 4;
-    player.x = Math.max(0, Math.min(W - player.w, player.x)); player.y = Math.max(0, Math.min(H - player.h, player.y));
-    obstacles.forEach(o => { 
-      o.x += o.dx; o.y += o.dy; if (o.x <= 0 || o.x + o.w >= W) o.dx *= -1; if (o.y <= 0 || o.y + o.h >= H) o.dy *= -1; 
-      if (player.x < o.x + o.w && player.x + player.w > o.x && player.y < o.y + o.h && player.y + player.h > o.y) { 
+    if (over || won) {
+      if (keys['r'] || keys['R']) reset();
+      drawOverlay(ctx, W, H, won ? 'YOU WIN!' : 'GAME OVER', `Coins: ${score}/${totalCoins}  —  Press R to restart`);
+      return;
+    }
+
+    if (keys['ArrowLeft'] || keys['a']) player.x -= 4;
+    if (keys['ArrowRight'] || keys['d']) player.x += 4;
+    if (keys['ArrowUp'] || keys['w']) player.y -= 4;
+    if (keys['ArrowDown'] || keys['s']) player.y += 4;
+
+    player.x = Math.max(0, Math.min(W - player.w, player.x));
+    player.y = Math.max(0, Math.min(H - player.h, player.y));
+
+    obstacles.forEach(o => {
+      o.x += o.dx;
+      o.y += o.dy;
+      if (o.x <= 0 || o.x + o.w >= W) o.dx *= -1;
+      if (o.y <= 0 || o.y + o.h >= H) o.dy *= -1;
+
+      if (player.x < o.x + o.w && player.x + player.w > o.x && player.y < o.y + o.h && player.y + player.h > o.y) {
         if (options.hasShield && !shieldUsed) {
           shieldUsed = true;
           o.dx *= -1;
           o.dy *= -1;
         } else {
-          over = true; 
+          over = true;
         }
-      } 
+      }
     });
-    coins.forEach(c => { if (!c.alive) return; const dx = (player.x + player.w / 2) - c.x, dy = (player.y + player.h / 2) - c.y; if (Math.sqrt(dx * dx + dy * dy) < c.r + 12) { c.alive = false; score++; if (onScore) onScore(score); } });
+
+    coins.forEach(c => {
+      if (!c.alive) return;
+      const dx = (player.x + player.w / 2) - c.x, dy = (player.y + player.h / 2) - c.y;
+      if (Math.sqrt(dx * dx + dy * dy) < c.r + 12) {
+        c.alive = false;
+        score++;
+        if (onScore) onScore(score);
+      }
+    });
+
     if (score === totalCoins) won = true;
+
     frame++;
     clearCanvas(ctx, W, H);
-    coins.forEach(c => { if (!c.alive) return; ctx.fillStyle = C.collectible; ctx.shadowColor = C.collectible; ctx.shadowBlur = 10; ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; });
-    ctx.fillStyle = C.enemy; obstacles.forEach(o => ctx.fillRect(o.x, o.y, o.w, o.h));
-    
-    // Draw player and shield
-    ctx.fillStyle = C.player; ctx.shadowColor = C.player; ctx.shadowBlur = 10; ctx.fillRect(player.x, player.y, player.w, player.h); ctx.shadowBlur = 0;
-    if (options.hasShield && !shieldUsed) {
-      ctx.strokeStyle = 'rgba(0, 229, 255, 0.7)';
-      ctx.lineWidth = 2;
+
+    coins.forEach(c => {
+      if (!c.alive) return;
+      ctx.fillStyle = C.collectible;
+      ctx.shadowColor = C.collectible;
+      ctx.shadowBlur = 10;
       ctx.beginPath();
-      ctx.arc(player.x + player.w / 2, player.y + player.h / 2, 18, 0, Math.PI * 2);
-      ctx.stroke();
-    }
+      ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    });
+
+    ctx.fillStyle = C.enemy;
+    obstacles.forEach(o => ctx.fillRect(o.x, o.y, o.w, o.h));
+
+    ctx.fillStyle = C.player;
+    ctx.shadowColor = C.player;
+    ctx.shadowBlur = 10;
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    ctx.shadowBlur = 0;
+
     drawText(ctx, `COINS: ${score}/${totalCoins}`, 12, 24, 14);
   }
   return { tick, reset };
@@ -453,133 +737,55 @@ const GAME_STARTERS = {
   coincollector: startCoinCollector,
 };
 
-/* ══════════════════════════════════════════════
-   GEMINI AI — generate custom game HTML
-   ══════════════════════════════════════════════ */
-async function generateGameFromAI(promptText) {
-  const response = await fetch('/api/v2/generate-game', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{
-        role: 'user',
-        parts: [{ text: `SYSTEM INSTRUCTIONS:\n${SYSTEM_PROMPT}\n\nUSER PROMPT: Create a game: ${promptText}` }]
-      }]
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`API error ${response.status}: ${errText}`);
-  }
-
-  const data = await response.json();
-  let html = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-  if (!html) {
-    throw new Error('Invalid game HTML received');
-  }
-
-  if (html.includes('```')) {
-    html = html.replace(/```html/g, '').replace(/```/g, '').trim();
-  }
-
-  return html;
+function resolveGame(prompt) {
+  const lower = (prompt || '').toLowerCase();
+  if (lower.includes('snake') || lower.includes('worm')) return 'snake';
+  if (lower.includes('brick') || lower.includes('breaker')) return 'brickbreaker';
+  if (lower.includes('platform') || lower.includes('jump')) return 'platformer';
+  if (lower.includes('space') || lower.includes('invader') || lower.includes('asteroid')) return 'asteroids';
+  if (lower.includes('coin') || lower.includes('collect')) return 'coincollector';
+  return 'asteroids';
 }
-
-/* ══════════════════════════════════════════════
-   BUILT-IN CHIP PROMPTS
-   ══════════════════════════════════════════════ */
-const CHIPS = [
-  { label: 'Asteroid Dodge', prompt: 'dodge falling asteroids' },
-  { label: 'Snake', prompt: 'classic snake game' },
-  { label: 'Brick Breaker', prompt: 'break all the bricks with a ball' },
-  { label: 'Platformer', prompt: 'jump between platforms and collect coins' },
-  { label: 'Space Invaders', prompt: 'shoot alien invaders from space' },
-  { label: 'Coin Collector', prompt: 'collect all the gold coins' },
-];
-const CHIP_PROMPTS = new Set(CHIPS.map(c => c.prompt));
-
-/* ══════════════════════════════════════════════
-   GAME PAGE COMPONENT — Full-screen game view
-   ══════════════════════════════════════════════ */
-const DraggableSection = ({ item, children }) => {
-  const controls = useDragControls();
-  return (
-    <motion.div 
-      drag 
-      dragListener={false} 
-      dragControls={controls} 
-      dragMomentum={false} 
-      whileDrag={{ zIndex: 50, scale: 1.02 }}
-      className="game-page-reorder-item"
-    >
-      <div className="drag-handle-wrapper" onPointerDown={(e) => controls.start(e)} style={{ touchAction: 'none' }}>
-        <GripHorizontal size={20} />
-      </div>
-      {children}
-    </motion.div>
-  );
-};
 
 const GamePage = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const gamePrompt = location.state?.prompt || 'asteroids';
-  const isBuiltin = location.state?.builtin || false;
-  const gameId = gamePrompt.toLowerCase().replace(/\s+/g, '-');
+  const searchParams = new URLSearchParams(location.search);
+  const promptParam = searchParams.get('prompt');
+  const gamePrompt = location.state?.prompt || promptParam || 'asteroids';
 
+  // Game state
   const [gameMode, setGameMode] = useState('none');
-  const [aiHtml, setAiHtml] = useState('');
-  const [toast, setToast] = useState('');
   const [error, setError] = useState('');
-
-  // New State for Game Details and AI Edit
-  const [game, setGame] = useState({
-    id: gameId,
-    title: gamePrompt,
-    description: 'An AI-powered game adventure.',
-    prompt: gamePrompt,
-    builtin: isBuiltin
-  });
-
-  const [chatHistory, setChatHistory] = useState([
-    { role: 'ai', content: "Hi! Describe any changes you'd like to make to this game and I'll update it for you." }
-  ]);
-  const [inputText, setInputText] = useState('');
-  const [isAILoading, setIsAILoading] = useState(false);
-  const [sections, setSections] = useState(['game', 'details']);
-
-  // Drag states and controls
-  const gameViewDragControls = useDragControls();
-  const chatDragControls = useDragControls();
-  const pageRef = useRef(null);
-  const [layoutKey, setLayoutKey] = useState(0);
-
-  // Load active powerups from local storage
-  const [walletCoins, setWalletCoins] = useState(() => {
-    return parseFloat(localStorage.getItem('croevo_coins') || '50');
-  });
-
+  const [toast, setToast] = useState('');
+  const [currentScore, setCurrentScore] = useState(0);
   const [shieldActive, setShieldActive] = useState(() => {
     return localStorage.getItem('croevo_shield_active') === 'true';
   });
-
   const [speedHackActive, setSpeedHackActive] = useState(() => {
     return localStorage.getItem('croevo_speed_hack_active') === 'true';
   });
 
-  const [activeTheme, setActiveTheme] = useState(() => {
-    return localStorage.getItem('croevo_theme') || 'default';
-  });
-  
-  const [currentScore, setCurrentScore] = useState(0);
-  const [claimableCoins, setClaimableCoins] = useState(0);
+  // AI Chat state
+  const [chatHistory, setChatHistory] = useState([]);
+  const [inputText, setInputText] = useState('');
+  const [isAILoading, setIsAILoading] = useState(false);
+  const [showAIPanel, setShowAIPanel] = useState(false);
+
+  // Draggable elements
+  const gameDraggable = useDraggable({ x: 20, y: 80 });
+  const aiDraggable = useDraggable({ x: 680, y: 80 });
+
+  const canvasRef = useRef(null);
+  const canvasWrapperRef = useRef(null);
+  const gameRef = useRef(null);
+  const rafRef = useRef(null);
+  const keysRef = useRef({});
+  const chatEndRef = useRef(null);
 
   const shieldActiveRef = useRef(shieldActive);
   const speedHackActiveRef = useRef(speedHackActive);
 
-  // Sync refs to state for game access without resetting loops
   useEffect(() => {
     shieldActiveRef.current = shieldActive;
   }, [shieldActive]);
@@ -588,84 +794,7 @@ const GamePage = () => {
     speedHackActiveRef.current = speedHackActive;
   }, [speedHackActive]);
 
-  // Persist wallet coins
-  useEffect(() => {
-    localStorage.setItem('croevo_coins', walletCoins.toString());
-  }, [walletCoins]);
-
-  // Load AI Prompt Charger on mount if active
-  useEffect(() => {
-    if (localStorage.getItem('croevo_ai_boost_active') === 'true') {
-      setInputText('Upgrade game visuals: Add highly polished glow animations, gold stars, and smooth transitions.');
-      localStorage.setItem('croevo_ai_boost_active', 'false');
-      setToast('AI Prompt Charger activated! Custom visual instruction loaded.');
-      setTimeout(() => setToast(''), 3000);
-    }
-  }, []);
-
-  // Intercept score updates from iframe if they postMessage
-  useEffect(() => {
-    const handleMessage = (event) => {
-      if (event.data && event.data.type === 'score') {
-        const score = parseInt(event.data.score, 10) || 0;
-        setCurrentScore(score);
-        setClaimableCoins(Math.min(100, Math.max(0, score * 2)));
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
-
-  // Callback to handle score updates from built-in games
-  const handleScoreUpdate = useCallback((score) => {
-    setCurrentScore(score);
-    const possibleCoins = Math.min(100, Math.max(0, score * 2));
-    setClaimableCoins(possibleCoins);
-  }, []);
-
-  const handleResetLayout = () => {
-    setLayoutKey(prev => prev + 1);
-    setToast('Workspace layout reset!');
-    setTimeout(() => setToast(''), 2000);
-  };
-
-  const canvasRef = useRef(null);
-  const canvasWrapperRef = useRef(null);
-  const iframeRef = useRef(null);
-  const gameRef = useRef(null);
-  const rafRef = useRef(null);
-  const keysRef = useRef({});
-  const chatEndRef = useRef(null);
-
-  /* ---- Sync with Backend on Mount ---- */
-  useEffect(() => {
-    const fetchGame = async () => {
-      try {
-        const res = await fetch(`/api/games/${gameId}`);
-        if (res.ok) {
-          const data = await res.json();
-          setGame(data);
-        } else {
-          // Initialize if not found
-          await fetch(`/api/games/${gameId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(game)
-          });
-        }
-      } catch (err) {
-        console.warn('Backend sync failed, using local state.');
-      }
-    };
-    fetchGame();
-  }, [gameId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  /* ---- Scroll Chat to Bottom ---- */
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatHistory]);
-
-  /* ---- keyboard listeners ---- */
+  // Keyboard tracking
   useEffect(() => {
     const down = (e) => {
       keysRef.current[e.key] = true;
@@ -678,181 +807,122 @@ const GamePage = () => {
     };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
-    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+    };
   }, []);
 
+  // Cleanup RAF on unmount
   useEffect(() => {
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
   }, []);
 
-  /* ---- focus the game area ---- */
-  const focusGameArea = useCallback(() => {
-    setTimeout(() => {
-      if (canvasWrapperRef.current) {
-        canvasWrapperRef.current.focus();
-      }
-    }, 100);
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatHistory]);
+
+  const handleScoreUpdate = useCallback((score) => {
+    setCurrentScore(score);
   }, []);
 
-  /* ---- launch a built-in game ---- */
-  const launchBuiltinGame = useCallback((text) => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    keysRef.current = {};
-    setError('');
-    setAiHtml('');
-    setCurrentScore(0);
-    setClaimableCoins(0);
-
-    const gameKey = resolveGame(text);
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.width = 600;
-    canvas.height = 400;
-
-    const starter = GAME_STARTERS[gameKey];
-    const gameStarter = starter(canvas, keysRef.current, handleScoreUpdate, {
-      hasShield: shieldActiveRef.current,
-      speedHack: speedHackActiveRef.current
-    });
-    gameRef.current = gameStarter;
-    setGameMode('builtin');
-    focusGameArea();
-
-    function loop() {
-      try { gameStarter.tick(); } catch (_) { }
-      rafRef.current = requestAnimationFrame(loop);
-    }
-    rafRef.current = requestAnimationFrame(loop);
-  }, [focusGameArea, handleScoreUpdate]);
-
-  /* ---- launch an AI-generated game ---- */
-  const launchAIGame = useCallback(async (text) => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    rafRef.current = null;
-    gameRef.current = null;
-    keysRef.current = {};
-    setError('');
-    setAiHtml('');
-    setGameMode('loading');
-    setCurrentScore(0);
-    setClaimableCoins(0);
-
-    try {
-      const html = await generateGameFromAI(text);
-      setAiHtml(html);
-      setGameMode('ai');
-      setGame(prev => ({ ...prev, html })); // Sync game code to state
-      focusGameArea();
-      
-      setClaimableCoins(25); // reward for creating custom AI game
-
-      // Persist the initial generated html to the backend
-      fetch(`/api/games/${gameId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ html })
-      }).catch(e => console.warn('Initial HTML persist failed'));
-
-    } catch (err) {
-      console.error('AI generation failed, falling back to built-in game:', err);
-      setToast('AI unavailable — loading closest match');
-      setTimeout(() => setToast(''), 3000);
-      launchBuiltinGame(text);
-    }
-  }, [focusGameArea, launchBuiltinGame, gameId]);
-
-  /* ---- Handle AI Message ---- */
-  const handleSendMessage = async () => {
-    if (!inputText.trim() || isAILoading) return;
+  // AI Chat handler
+  const handleSendMessage = useCallback(async () => {
+    if (!inputText.trim()) return;
 
     const userMsg = inputText.trim();
     setInputText('');
-    const updatedHistory = [...chatHistory, { role: 'user', content: userMsg }];
-    setChatHistory(updatedHistory);
+    
+    // Add user message to chat
+    const newHistory = [...chatHistory, { role: 'user', content: userMsg }];
+    setChatHistory(newHistory);
     setIsAILoading(true);
 
     try {
-      const response = await fetch(`/api/games/${gameId}/ai-edit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('http://localhost:5001/api/games/temp/ai-edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userMessage: userMsg,
-          conversationHistory: updatedHistory
-        })
+          conversationHistory: chatHistory,
+        }),
       });
 
-      if (!response.ok) {
-        setChatHistory(prev => [...prev, { role: 'error', content: "Sorry, I couldn't process that. Please try rephrasing." }]);
-        setIsAILoading(false);
-        return;
+      const data = await response.json();
+      
+      if (data.error) {
+        setChatHistory(prev => [...prev, { role: 'error', content: data.error }]);
+      } else {
+        // Add AI response
+        const aiReply = data.message || 'Game settings updated based on your request!';
+        setChatHistory(prev => [...prev, { role: 'assistant', content: aiReply }]);
+        setToast('Game modified! Changes will apply on next restart.');
       }
-
-      const { updatedFields, message } = await response.json();
-
-      // If AI updated the HTML/Game code
-      if (updatedFields.html) {
-        setAiHtml(updatedFields.html);
-        setGameMode('ai');
-        focusGameArea();
-      }
-
-      // Parse fields updated
-      const fieldNames = Object.keys(updatedFields).filter(f => f !== 'html').join(' and ') || 'gameplay';
-      const aiResponse = message ? `Done! I've updated the ${fieldNames}.` : "I've applied those changes for you!";
-
-      // Optimistic Update
-      setGame(prev => ({ ...prev, ...updatedFields }));
-      setChatHistory(prev => [...prev, { role: 'ai', content: aiResponse }]);
-
-      // Persist via Existing Update Endpoint
-      try {
-        const patchRes = await fetch(`/api/games/${gameId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updatedFields)
-        });
-        if (!patchRes.ok) throw new Error("Persistence failed");
-      } catch (e) {
-        setChatHistory(prev => [...prev, { role: 'error', content: "The changes couldn't be saved. Please try again." }]);
-      }
-
     } catch (err) {
-      console.error(err);
-      setChatHistory(prev => [...prev, { role: 'error', content: "Sorry, I couldn't process that. Please try rephrasing." }]);
+      setChatHistory(prev => [...prev, { role: 'error', content: 'Failed to connect to AI service. Make sure the server is running.' }]);
     } finally {
       setIsAILoading(false);
     }
-  };
+  }, [inputText, chatHistory]);
 
-  /* ---- auto-launch game on mount ---- */
+  const launchBuiltinGame = useCallback((text) => {
+    const _launch = (attempt = 0) => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      keysRef.current = {};
+      setError('');
+      setCurrentScore(0);
+
+      const gameKey = resolveGame(text);
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        if (attempt < 8) {
+          setTimeout(() => _launch(attempt + 1), 120);
+        } else {
+          setError('Unable to find game canvas. Try reloading the page.');
+        }
+        return;
+      }
+
+      canvas.width = 600;
+      canvas.height = 400;
+
+      const starter = GAME_STARTERS[gameKey];
+      const gameStarter = starter(canvas, keysRef.current, handleScoreUpdate, {
+        hasShield: shieldActiveRef.current,
+        speedHack: speedHackActiveRef.current
+      });
+      gameRef.current = gameStarter;
+      setGameMode('builtin');
+
+      if (canvasWrapperRef.current) {
+        setTimeout(() => canvasWrapperRef.current.focus(), 100);
+      }
+
+      function loop() {
+        try {
+          gameStarter.tick();
+        } catch (_) {}
+        rafRef.current = requestAnimationFrame(loop);
+      }
+      rafRef.current = requestAnimationFrame(loop);
+    };
+
+    _launch(0);
+  }, [handleScoreUpdate]);
+
   useEffect(() => {
-    if (isBuiltin) {
-      launchBuiltinGame(gamePrompt);
-    } else {
-      launchAIGame(gamePrompt);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    launchBuiltinGame(gamePrompt);
   }, []);
 
   const handleRestart = () => {
     if (gameMode === 'builtin' && gameRef.current) {
-      // Re-launch game to consume active enhancements (shield, speedhack)
       launchBuiltinGame(gamePrompt);
-    } else if (gameMode === 'ai' && iframeRef.current) {
-      const iframe = iframeRef.current;
-      const src = iframe.srcdoc;
-      iframe.srcdoc = '';
-      setTimeout(() => { iframe.srcdoc = src; }, 50);
     }
-    setTimeout(() => { if (canvasWrapperRef.current) canvasWrapperRef.current.focus(); }, 100);
-  };
-
-  const handleShare = () => {
-    navigator.clipboard.writeText(gamePrompt).then(() => {
-      setToast('Prompt copied to clipboard!');
-      setTimeout(() => setToast(''), 2000);
-    }).catch(() => { });
-    setTimeout(() => { if (canvasWrapperRef.current) canvasWrapperRef.current.focus(); }, 100);
   };
 
   const handleBack = () => {
@@ -860,404 +930,135 @@ const GamePage = () => {
     navigate('/');
   };
 
-  /* ---- Coin accumulation handlers ---- */
-  const handleMineCoins = () => {
-    if (miningCooldown > 0 || isMining) return;
-    setIsMining(true);
-    // Simulate mining animation
-    setTimeout(() => {
-      setWalletCoins(prev => prev + 10);
-      setIsMining(false);
-      setMiningCooldown(15); // 15s cooldown
-      setToast('Mined +10 Croevo Coins!');
-      setTimeout(() => setToast(''), 2000);
-    }, 3000);
-  };
-
-  const handleClaimGameReward = () => {
-    if (claimableCoins <= 0) return;
-    setWalletCoins(prev => prev + claimableCoins);
-    setToast(`Claimed ${claimableCoins} Croevo Coins!`);
-    setClaimableCoins(0);
-    setTimeout(() => setToast(''), 2000);
-  };
-
-  const handleExchange = (serviceId, cost) => {
-    if (walletCoins < cost) {
-      setToast('Insufficient Coins! Mine some coins or play a game to earn more.');
-      setTimeout(() => setToast(''), 3000);
-      return;
-    }
-
-    if (serviceId === 'theme-cyberpunk') {
-      if (unlockedThemes.includes('cyberpunk')) {
-        // Toggle theme
-        const newTheme = activeTheme === 'cyberpunk' ? 'default' : 'cyberpunk';
-        setActiveTheme(newTheme);
-        setToast(newTheme === 'cyberpunk' ? 'Cyberpunk Theme Active!' : 'Default Theme Active');
-      } else {
-        // Unlock
-        setWalletCoins(prev => prev - cost);
-        setUnlockedThemes(prev => [...prev, 'cyberpunk']);
-        setActiveTheme('cyberpunk');
-        setToast('Unlocked & Activated Cyberpunk Theme!');
-      }
-    } else if (serviceId === 'theme-neon-purple') {
-      if (unlockedThemes.includes('neon-purple')) {
-        // Toggle theme
-        const newTheme = activeTheme === 'neon-purple' ? 'default' : 'neon-purple';
-        setActiveTheme(newTheme);
-        setToast(newTheme === 'neon-purple' ? 'Neon Purple Theme Active!' : 'Default Theme Active');
-      } else {
-        // Unlock
-        setWalletCoins(prev => prev - cost);
-        setUnlockedThemes(prev => [...prev, 'neon-purple']);
-        setActiveTheme('neon-purple');
-        setToast('Unlocked & Activated Neon Purple Theme!');
-      }
-    } else if (serviceId === 'shield') {
-      setWalletCoins(prev => prev - cost);
-      setShieldActive(true);
-      setToast('Shield Activated! +2 Lives / protection loaded for your next game run.');
-    } else if (serviceId === 'ai-boost') {
-      setWalletCoins(prev => prev - cost);
-      setInputText('Upgrade game visuals: Add highly polished glow animations, gold stars, and smooth transitions.');
-      setToast('AI Prompt Charger loaded! Press Send to generate.');
-    } else if (serviceId === 'speed-hack') {
-      setWalletCoins(prev => prev - cost);
-      setSpeedHackActive(true);
-      setToast('Speed Hack Activated! Game obstacles slowed down by 35% for your next game run.');
-    }
-
-    setTimeout(() => setToast(''), 3000);
-  };
-
-  const isLoading = gameMode === 'loading';
-  const hasGame = gameMode === 'builtin' || gameMode === 'ai';
-
   return (
-    <div className={`game-page theme-${activeTheme}`} ref={pageRef}>
-      {/* Header Bar */}
+    <div className="game-page">
       <div className="game-page-header">
         <button className="game-page-back-btn" onClick={handleBack}>
           <ArrowLeft size={18} />
-          <span>Back to Lab</span>
+          <span>Back</span>
         </button>
         <div className="game-page-title">
           <Gamepad2 size={20} />
-          <span>{game.title}</span>
+          <span>{gamePrompt}</span>
         </div>
         <div className="game-page-actions">
-          <button className="game-page-tool-btn layout-reset-btn" onClick={handleResetLayout}>
-            <LayoutGrid size={15} />
-            <span>Reset Layout</span>
-          </button>
-          {hasGame && (
+          {gameMode === 'builtin' && (
             <>
-              <button className="game-page-tool-btn" onClick={handleRestart}><RotateCcw size={16} /> Restart</button>
-              <button className="game-page-tool-btn" onClick={handleShare}><Share2 size={16} /> Share</button>
+              <button className="game-page-tool-btn" onClick={handleRestart}>
+                <RotateCcw size={16} /> Restart
+              </button>
+              <button 
+                className={`game-page-tool-btn ${showAIPanel ? 'active' : ''}`} 
+                onClick={() => setShowAIPanel(!showAIPanel)}
+              >
+                <Sparkles size={16} /> AI Editor
+              </button>
             </>
           )}
         </div>
       </div>
 
-      {/* Main Workspace Workspace Dashboard */}
       <div className="game-workspace">
-        {/* Panel 1: Game View Card */}
-        <motion.div
-          key={`game-view-${layoutKey}`}
-          drag
-          dragControls={gameViewDragControls}
-          dragListener={false}
-          dragConstraints={pageRef}
-          dragElastic={0.12}
-          dragMomentum={false}
-          className={`draggable-card game-view-card ${isLoading ? 'loading' : ''}`}
-          initial={{ opacity: 0, scale: 0.97 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.4 }}
+        {/* Game Canvas - Draggable */}
+        <div 
+          className="draggable-card game-view-card" 
+          ref={gameDraggable.elementRef}
+          style={gameDraggable.style}
+          onMouseDown={gameDraggable.handleMouseDown}
         >
-          <div className="panel-drag-handle" onPointerDown={(e) => gameViewDragControls.start(e)}>
+          <div className="panel-drag-handle">
             <div className="drag-handle-left">
-              <span className="drag-dots">⋮⋮</span>
-              <Gamepad2 size={16} className="handle-icon" />
-              <span className="handle-title">Game View {currentScore > 0 ? `| Live Score: ${currentScore}` : ''}</span>
-            </div>
-            <div className="drag-handle-right">
-              {shieldActive && <span className="active-badge shield-badge"><Shield size={12} /> SHIELD LOADED</span>}
-              {speedHackActive && <span className="active-badge speed-badge"><Zap size={12} /> SLOW LOADED</span>}
-              <span className="drag-helper">DRAG PANEL</span>
+              <Gamepad2 size={16} />
+              <span>Game Canvas - Score: {currentScore}</span>
             </div>
           </div>
 
           <div className="panel-inner-content game-canvas-wrapper-inner" ref={canvasWrapperRef} tabIndex={0} style={{ outline: 'none' }}>
-            {/* Loading */}
-            {isLoading && (
-              <div className="game-page-placeholder game-page-loading-state">
-                <Loader size={48} className="game-lab-spinner" />
-                <span>GENERATING YOUR GAME...</span>
-                <span className="game-page-loading-sub">AI is building a custom game for you</span>
-              </div>
-            )}
-
-            {/* Built-in canvas */}
             <canvas ref={canvasRef} style={{ display: gameMode === 'builtin' ? 'block' : 'none' }} />
-
-            {/* AI-generated iframe */}
-            {gameMode === 'ai' && aiHtml && (
-              <iframe
-                ref={iframeRef}
-                srcDoc={aiHtml}
-                title="AI Generated Game"
-                sandbox="allow-scripts"
-                style={{
-                  width: '100%',
-                  aspectRatio: '3 / 2',
-                  border: 'none',
-                  display: 'block',
-                  background: '#050810',
-                }}
-              />
-            )}
-
-            {/* Error */}
-            {error && (
-              <div className="game-page-error">
-                {error}
-              </div>
-            )}
-          </div>
-        </motion.div>
-
-        {/* Panel 2: Wallet & Customizer Card */}
-        <motion.div
-          key={`wallet-${layoutKey}`}
-          drag
-          dragControls={walletDragControls}
-          dragListener={false}
-          dragConstraints={pageRef}
-          dragElastic={0.12}
-          dragMomentum={false}
-          className="draggable-card wallet-card"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15, duration: 0.4 }}
-        >
-          <div className="panel-drag-handle" onPointerDown={(e) => walletDragControls.start(e)}>
-            <div className="drag-handle-left">
-              <span className="drag-dots">⋮⋮</span>
-              <Coins size={16} className="handle-icon text-gold" />
-              <span className="handle-title">Coins Wallet & Upgrades</span>
-            </div>
-            <div className="drag-handle-right">
-              <span className="drag-helper">DRAG PANEL</span>
-            </div>
-          </div>
-
-          <div className="panel-inner-content wallet-content-inner">
-            {/* Balance Card */}
-            <div className="wallet-balance-card">
-              <div className="balance-info">
-                <span className="label">BALANCE</span>
-                <span className="value">🪙 {walletCoins} <span className="currency-label">CC</span></span>
-              </div>
-              <div className="wallet-actions">
-                <button 
-                  className={`wallet-btn mine-btn ${isMining ? 'active' : ''}`}
-                  onClick={handleMineCoins}
-                  disabled={isMining || miningCooldown > 0}
-                >
-                  {isMining ? (
-                    <>
-                      <Loader size={13} className="loading-spinner" />
-                      <span>MINING...</span>
-                    </>
-                  ) : miningCooldown > 0 ? (
-                    <span>MINE ({miningCooldown}s)</span>
-                  ) : (
-                    <>
-                      <Hammer size={13} />
-                      <span>MINE +10 CC</span>
-                    </>
-                  )}
-                </button>
-                <button 
-                  className={`wallet-btn claim-btn ${claimableCoins > 0 ? 'glowing' : ''}`}
-                  onClick={handleClaimGameReward}
-                  disabled={claimableCoins <= 0}
-                >
-                  <Sparkles size={13} />
-                  <span>CLAIM REWARDS ({claimableCoins} CC)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Exchange Shop */}
-            <div className="exchange-shop-section">
-              <h3 className="section-title">COIN EXCHANGE SHOP</h3>
-              <p className="section-desc">Unlock enhancements and themes for your Game Lab session</p>
-              
-              <div className="shop-list">
-                {/* Cyberpunk Theme */}
-                <div className={`shop-list-item ${activeTheme === 'cyberpunk' ? 'selected' : ''}`}>
-                  <div className="item-meta">
-                    <span className="name">Cyberpunk Gold Theme</span>
-                    <span className="desc">Toggles user interface palette to neon gold & black</span>
-                  </div>
-                  <button 
-                    className={`buy-btn ${unlockedThemes.includes('cyberpunk') ? 'owned' : ''}`}
-                    onClick={() => handleExchange('theme-cyberpunk', 15)}
-                  >
-                    {unlockedThemes.includes('cyberpunk') ? (
-                      activeTheme === 'cyberpunk' ? 'ACTIVE' : 'USE'
-                    ) : (
-                      '15 CC'
-                    )}
-                  </button>
-                </div>
-
-                {/* Neon Purple Theme */}
-                <div className={`shop-list-item ${activeTheme === 'neon-purple' ? 'selected' : ''}`}>
-                  <div className="item-meta">
-                    <span className="name">Neon Purple Theme</span>
-                    <span className="desc">Toggles user interface palette to neon purple & dark violet</span>
-                  </div>
-                  <button 
-                    className={`buy-btn ${unlockedThemes.includes('neon-purple') ? 'owned' : ''}`}
-                    onClick={() => handleExchange('theme-neon-purple', 15)}
-                  >
-                    {unlockedThemes.includes('neon-purple') ? (
-                      activeTheme === 'neon-purple' ? 'ACTIVE' : 'USE'
-                    ) : (
-                      '15 CC'
-                    )}
-                  </button>
-                </div>
-
-                {/* Shield Power-up */}
-                <div className={`shop-list-item ${shieldActive ? 'active-power' : ''}`}>
-                  <div className="item-meta">
-                    <span className="name">Shield Barrier</span>
-                    <span className="desc">Gives +2 lives or blocks collision once in next game run</span>
-                  </div>
-                  <button 
-                    className={`buy-btn ${shieldActive ? 'purchased' : ''}`}
-                    onClick={() => handleExchange('shield', 25)}
-                    disabled={shieldActive}
-                  >
-                    {shieldActive ? 'LOADED' : '25 CC'}
-                  </button>
-                </div>
-
-                {/* AI Assistant Charger */}
-                <div className="shop-list-item">
-                  <div className="item-meta">
-                    <span className="name">AI Prompt Charger</span>
-                    <span className="desc">Loads a custom visual optimization instruction into editor</span>
-                  </div>
-                  <button 
-                    className="buy-btn"
-                    onClick={() => handleExchange('ai-boost', 30)}
-                  >
-                    30 CC
-                  </button>
-                </div>
-
-                {/* Speed Hack customizer */}
-                <div className={`shop-list-item ${speedHackActive ? 'active-power' : ''}`}>
-                  <div className="item-meta">
-                    <span className="name">Speed Customizer</span>
-                    <span className="desc">Slows obstacle movement speeds by 35% in next game run</span>
-                  </div>
-                  <button 
-                    className={`buy-btn ${speedHackActive ? 'purchased' : ''}`}
-                    onClick={() => handleExchange('speed-hack', 40)}
-                    disabled={speedHackActive}
-                  >
-                    {speedHackActive ? 'LOADED' : '40 CC'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Panel 3: Editor & AI Chat Card */}
-        <motion.div
-          key={`chat-editor-${layoutKey}`}
-          drag
-          dragControls={chatDragControls}
-          dragListener={false}
-          dragConstraints={pageRef}
-          dragElastic={0.12}
-          dragMomentum={false}
-          className="draggable-card chat-editor-card"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.4 }}
-        >
-          <div className="panel-drag-handle" onPointerDown={(e) => chatDragControls.start(e)}>
-            <div className="drag-handle-left">
-              <span className="drag-dots">⋮⋮</span>
-              <Sparkles size={16} className="handle-icon" />
-              <span className="handle-title">AI Editor & Prompt Chat</span>
-            </div>
-            <div className="drag-handle-right">
-              <span className="drag-helper">DRAG PANEL</span>
-            </div>
-          </div>
-
-          <div className="panel-inner-content chat-editor-inner">
-            <div className="game-metadata-row">
-              <h1>{game.title}</h1>
-              <p>{game.description}</p>
-            </div>
-
-            <div className="game-ai-edit-section">
-              <div className="section-header">
-                <div className="ai-badge">AI</div>
-                <h2>Edit with AI</h2>
-              </div>
-
-              <div className="ai-chat-container">
-                <div className="ai-chat-history">
-                  {chatHistory.map((msg, idx) => (
-                    <div key={idx} className={`chat-message ${msg.role}`}>
-                      {msg.content}
-                    </div>
-                  ))}
-                  {isAILoading && (
-                    <div className="chat-message ai">
-                      <Loader size={16} className="loading-spinner" />
-                    </div>
-                  )}
-                  <div ref={chatEndRef} />
-                </div>
-
-                <div className="ai-chat-input-row">
-                  <input 
-                    type="text" 
-                    placeholder="Describe how you'd like to change this game..."
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                    disabled={isAILoading}
-                  />
-                  <button 
-                    className="ai-chat-send-btn"
-                    onClick={handleSendMessage}
-                    disabled={isAILoading || !inputText.trim()}
-                  >
-                    {isAILoading ? <Loader size={16} className="loading-spinner" /> : "Send"}
-                  </button>
-                </div>
-            </div>
+            {error && <div className="game-page-error">{error}</div>}
           </div>
         </div>
-        </motion.div>
+
+        {/* AI Editor - Draggable */}
+        {showAIPanel && (
+          <div 
+            className="draggable-card ai-editor-card" 
+            ref={aiDraggable.elementRef}
+            style={aiDraggable.style}
+            onMouseDown={aiDraggable.handleMouseDown}
+          >
+            <div className="panel-drag-handle">
+              <div className="drag-handle-left">
+                <Sparkles size={16} />
+                <span>AI Game Modifier</span>
+              </div>
+              <button 
+                className="close-btn"
+                onClick={() => setShowAIPanel(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="panel-inner-content ai-chat-content">
+              <div className="ai-chat-info">
+                <MessageSquare size={14} />
+                <span>Describe changes you want to make to the game</span>
+              </div>
+
+              <div className="chat-messages">
+                {chatHistory.length === 0 ? (
+                  <div className="chat-placeholder">
+                    <Settings size={20} />
+                    <p>Ask to change game colors, speed, difficulty, or any game mechanics!</p>
+                  </div>
+                ) : (
+                  chatHistory.map((msg, idx) => (
+                    <div key={idx} className={`chat-message ${msg.role}`}>
+                      <div className="message-content">
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))
+                )}
+                {isAILoading && (
+                  <div className="chat-message assistant loading">
+                    <div className="message-content">
+                      <Loader className="spinner" size={16} />
+                      <span>Processing your request...</span>
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              <div className="chat-input-area">
+                <textarea
+                  className="chat-input"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  placeholder="Change colors, speed, difficulty..."
+                  disabled={isAILoading}
+                />
+                <button 
+                  className="send-btn"
+                  onClick={handleSendMessage}
+                  disabled={isAILoading || !inputText.trim()}
+                >
+                  <Send size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Toast */}
       <div className={`game-lab-toast ${toast ? 'visible' : ''}`}>{toast}</div>
     </div>
   );

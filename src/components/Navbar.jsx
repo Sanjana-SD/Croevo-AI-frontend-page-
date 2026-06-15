@@ -26,14 +26,10 @@ const Navbar = ({ onOpenWaitlist }) => {
           FAQ
           <span className="hud-dot"></span>
         </NavLink>
-        <NavLink to="/wallet" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-          WALLET
+        <NavLink to="/profile" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+          PROFILE
           <span className="hud-dot"></span>
         </NavLink>
-        <a href="/#game-lab" className="nav-item">
-          GAME LAB
-          <span className="hud-dot"></span>
-        </a>
         <NavLink to="/wallet" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
           WALLET
           <span className="hud-dot"></span>
