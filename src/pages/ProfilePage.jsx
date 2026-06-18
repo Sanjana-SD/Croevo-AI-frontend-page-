@@ -5,6 +5,7 @@ import './ProfilePage.css';
 
 const ProfilePage = () => {
   const navigate = useNavigate();
+  const [username, setUsername] = useState(() => localStorage.getItem('croevo_username') || 'Operator');
   const [walletCoins, setWalletCoins] = useState(() => parseFloat(localStorage.getItem('croevo_coins') || '50'));
   const [lifetimeCoins, setLifetimeCoins] = useState(() => parseFloat(localStorage.getItem('croevo_lifetime_coins') || '50'));
   const [rigLevel, setRigLevel] = useState(() => parseInt(localStorage.getItem('croevo_rig_level') || '1', 10));
@@ -27,13 +28,51 @@ const ProfilePage = () => {
         <div style={{ width: '80px' }} />
       </div>
 
+      {/* Username edit */}
+      <div className="username-section" style={{ marginBottom: '24px', textAlign: 'center' }}>
+        <h2 style={{ color: '#00e5ff', marginBottom: '8px' }}>Username</h2>
+        <input
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          style={{
+            background: 'rgba(0,229,255,0.1)',
+            border: '1px solid #00e5ff',
+            color: '#00e5ff',
+            padding: '8px 12px',
+            borderRadius: '6px',
+            width: '200px',
+            textAlign: 'center',
+            fontFamily: 'Orbitron, monospace',
+          }}
+        />
+        <button
+          onClick={() => {
+            localStorage.setItem('croevo_username', username);
+            alert('Username saved!');
+          }}
+          style={{
+            marginLeft: '12px',
+            background: '#00e5ff',
+            color: '#050810',
+            border: 'none',
+            padding: '8px 12px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontFamily: 'Orbitron, monospace',
+          }}
+        >
+          Save
+        </button>
+      </div>
+
       <div className="profile-grid">
         {/* User Card */}
         <div className="profile-card user-card">
           <div className="card-icon">
             <User size={40} />
           </div>
-          <h2>Welcome Operator</h2>
+          <h2>Welcome {username}</h2>
           <p className="card-subtitle">Croevo Infinity Player</p>
           <div className="user-stats">
             <div className="stat-item">

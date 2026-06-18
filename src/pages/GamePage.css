@@ -1081,11 +1081,15 @@
 .chat-message {
   padding: 10px 14px;
   border-radius: 10px;
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.5;
   max-width: 90%;
   word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  word-break: break-word;
   animation: slideIn 0.3s ease;
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
 }
 
 @keyframes slideIn {
@@ -1128,6 +1132,12 @@
 }
 
 .message-content {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat-message.loading .message-content {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1156,14 +1166,17 @@
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(0, 229, 255, 0.2);
   border-radius: 6px;
-  padding: 8px 12px;
+  padding: 10px 14px;
   color: #fff;
-  font-family: 'Orbitron', monospace;
-  font-size: 11px;
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
   resize: none;
   max-height: 80px;
   outline: none;
   transition: all 0.2s ease;
+  white-space: pre-wrap;
+  word-spacing: normal;
+  letter-spacing: normal;
 }
 
 .chat-input:focus {

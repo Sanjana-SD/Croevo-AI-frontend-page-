@@ -798,7 +798,8 @@ const GamePage = () => {
   useEffect(() => {
     const down = (e) => {
       keysRef.current[e.key] = true;
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key) && document.activeElement.tagName !== 'INPUT') {
+      const tag = document.activeElement.tagName;
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key) && tag !== 'INPUT' && tag !== 'TEXTAREA') {
         e.preventDefault();
       }
     };
@@ -839,36 +840,20 @@ const GamePage = () => {
     setInputText('');
     
     // Add user message to chat
-    const newHistory = [...chatHistory, { role: 'user', content: userMsg }];
-    setChatHistory(newHistory);
+    setChatHistory(prev => [...prev, { role: 'user', content: userMsg }]);
     setIsAILoading(true);
 
     try {
-      const response = await fetch('http://localhost:5001/api/games/temp/ai-edit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userMessage: userMsg,
-          conversationHistory: chatHistory,
-        }),
-      });
-
-      const data = await response.json();
-      
-      if (data.error) {
-        setChatHistory(prev => [...prev, { role: 'error', content: data.error }]);
-      } else {
-        // Add AI response
-        const aiReply = data.message || 'Game settings updated based on your request!';
-        setChatHistory(prev => [...prev, { role: 'assistant', content: aiReply }]);
-        setToast('Game modified! Changes will apply on next restart.');
-      }
+      const { queryGroq } = await import('../api/groq');
+      const aiReply = await queryGroq(userMsg);
+      setChatHistory(prev => [...prev, { role: 'assistant', content: aiReply }]);
     } catch (err) {
-      setChatHistory(prev => [...prev, { role: 'error', content: 'Failed to connect to AI service. Make sure the server is running.' }]);
+      console.error('[AI Chat]', err);
+      setChatHistory(prev => [...prev, { role: 'error', content: err.message || 'Failed to communicate with AI service.' }]);
     } finally {
       setIsAILoading(false);
     }
-  }, [inputText, chatHistory]);
+  }, [inputText]);
 
   const launchBuiltinGame = useCallback((text) => {
     const _launch = (attempt = 0) => {
